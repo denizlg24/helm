@@ -1,0 +1,87 @@
+[data-theme="lavender"] {
+  --background: #f8f6fb;
+  --surface: #e2dcef;
+  --muted: #b8acd6;
+
+  --accent: #9787c2;
+  --accent-strong: #3a2e5a;
+  --foreground: #56486b;
+
+  --card: var(--background);
+  --card-foreground: var(--foreground);
+
+  --popover: var(--background);
+  --popover-foreground: var(--foreground);
+
+  --primary: var(--accent-strong);
+  --primary-foreground: var(--background);
+
+  --secondary: var(--surface);
+  --secondary-foreground: var(--foreground);
+
+  --muted-foreground: #443a5a;
+  --accent-foreground: var(--foreground);
+
+  --destructive: #c0352b;
+  --input: var(--surface);
+  --border: var(--muted);
+  --ring: var(--accent-strong);
+
+  --chart-1: var(--accent);
+  --chart-2: var(--accent-strong);
+  --chart-3: #9787c2;
+  --chart-4: #b8acd6;
+  --chart-5: #3a2e5a;
+
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--accent-strong);
+  --sidebar-primary-foreground: var(--background);
+  --sidebar-accent: var(--surface);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--accent-strong);
+}
+
+[data-theme="lavender"].dark {
+  --background: #221e30;
+  --foreground: #f8f6fb;
+
+  --card: #2e2842;
+  --card-foreground: var(--foreground);
+
+  --popover: #2e2842;
+  --popover-foreground: var(--foreground);
+
+  --primary: #9787c2;
+  --primary-foreground: #221e30;
+
+  --secondary: #443a5a;
+  --secondary-foreground: var(--foreground);
+
+  --muted: #443a5a;
+  --muted-foreground: #b8acd6;
+
+  --accent: #9787c2;
+  --accent-foreground: #221e30;
+
+  --destructive: #a04033;
+  --border: #443a5a;
+  --input: #443a5a;
+  --ring: #9787c2;
+
+  --chart-1: #9787c2;
+  --chart-2: #6f5f9a;
+  --chart-3: #b8acd6;
+  --chart-4: #e2dcef;
+  --chart-5: #221e30;
+
+  --sidebar: #221e30;
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: #9787c2;
+  --sidebar-primary-foreground: #221e30;
+  --sidebar-accent: #443a5a;
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: #443a5a;
+  --sidebar-ring: #9787c2;
+}
