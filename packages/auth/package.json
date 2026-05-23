@@ -31,7 +31,7 @@
     }
   },
   "scripts": {
-    "build": "bun build ./src/server.ts ./src/client.ts ./src/permissions.ts ./src/types.ts ./src/env.ts ./src/constants.ts --outdir ./dist --target node --format cjs --packages external",
+    "build": "bun build ./src/server.ts ./src/client.ts ./src/permissions.ts ./src/types.ts ./src/env.ts ./src/constants.ts --outdir ./dist --target node --format cjs",
     "typecheck": "tsc --noEmit",
     "lint": "biome lint .",
     "format": "biome format --write ."
