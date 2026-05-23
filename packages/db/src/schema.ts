@@ -382,5 +382,38 @@ export const llmUsage = pgTable(
   (table) => [
     index("llm_usage_tenant_id_idx").on(table.tenantId),
     index("llm_usage_workspace_id_idx").on(table.workspaceId),
+    index("llm_usage_workspace_created_idx").on(
+      table.workspaceId,
+      table.createdAt
+    ),
+  ]
+)
+
+export const usageCredits = pgTable(
+  "usage_credits",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    entryType: text("entry_type").notNull(),
+    source: text("source").notNull(),
+    sourceRef: text("source_ref"),
+    amountUsdCents: integer("amount_usd_cents").notNull(),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("usage_credits_workspace_id_idx").on(table.workspaceId),
+    index("usage_credits_tenant_id_idx").on(table.tenantId),
+    uniqueIndex("usage_credits_source_ref_unique").on(
+      table.source,
+      table.sourceRef
+    ),
   ]
 )

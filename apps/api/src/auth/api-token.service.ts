@@ -57,6 +57,9 @@ export class ApiTokenService {
         userId: authContext.userId,
         expiresIn: input.expiresIn,
         permissions: toPermissions(input.scopes),
+        rateLimitEnabled: input.rateLimit?.enabled,
+        rateLimitTimeWindow: input.rateLimit?.timeWindowMs,
+        rateLimitMax: input.rateLimit?.maxRequests,
       },
     })
   }
@@ -68,6 +71,9 @@ export class ApiTokenService {
         keyId,
         name: input.name,
         permissions: input.scopes ? toPermissions(input.scopes) : undefined,
+        rateLimitEnabled: input.rateLimit?.enabled,
+        rateLimitTimeWindow: input.rateLimit?.timeWindowMs,
+        rateLimitMax: input.rateLimit?.maxRequests,
       },
     })
   }
