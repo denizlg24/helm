@@ -123,11 +123,19 @@ export const DeviceActivationStatusSchema = z.object({
   status: z.enum(["pending", "approved", "denied", "expired"]),
 })
 
-export const ApiTokenRateLimitSchema = z.object({
-  enabled: z.boolean().optional(),
-  maxRequests: z.number().int().positive().optional(),
-  timeWindowMs: z.number().int().positive().optional(),
-})
+export const ApiTokenRateLimitSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    maxRequests: z.number().int().positive().optional(),
+    timeWindowMs: z.number().int().positive().optional(),
+  })
+  .refine(
+    (obj: { enabled?: boolean; maxRequests?: number; timeWindowMs?: number }) => Object.values(obj).some((v) => v !== undefined),
+    {
+      message:
+        "rateLimit must contain at least one of: enabled, maxRequests, timeWindowMs",
+    }
+  )
 
 export const CreateApiTokenInputSchema = z.object({
   name: z.string().min(1).max(120),
@@ -147,7 +155,7 @@ export const UpdateApiTokenInputSchema = z
     rateLimit: ApiTokenRateLimitSchema.optional(),
   })
   .refine(
-    (input) =>
+    (input: { name?: string; scopes?: string[]; rateLimit?: z.infer<typeof ApiTokenRateLimitSchema> }) =>
       input.name !== undefined ||
       input.scopes !== undefined ||
       input.rateLimit !== undefined,
@@ -179,7 +187,7 @@ export const RecordLlmUsageInputSchema = z.object({
   model: z.string().min(1),
   inputTokens: z.number().int().nonnegative().default(0),
   outputTokens: z.number().int().nonnegative().default(0),
-  costUsdCents: z.number().int().nonnegative().default(0),
+  costUsdCents: z.number().nonnegative().default(0),
   userId: z.string().min(1).nullable().optional(),
 })
 
@@ -198,7 +206,7 @@ export const UsageCreditSourceSchema = z.enum([
 export const GrantUsageCreditInputSchema = z.object({
   amountUsdCents: z.number().int().positive(),
   source: UsageCreditSourceSchema.default("manual"),
-  sourceRef: z.string().min(1).optional(),
+  sourceRef: z.string().min(1),
   note: z.string().max(500).optional(),
 })
 

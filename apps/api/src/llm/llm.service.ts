@@ -177,8 +177,15 @@ export class LlmService {
       this.buildAnthropicParams(messages, model, options)
     )
     if (options.record !== false) {
-      stream.on("finalMessage", (message) => {
-        void this.recordAnthropicUsage(actor, model, message, options)
+      stream.on("finalMessage", async (message) => {
+        try {
+          await this.recordAnthropicUsage(actor, model, message, options)
+        } catch (error) {
+          this.logger.error(
+            `Failed to record streamed Anthropic usage for workspace ${actor.workspaceId}`,
+            error instanceof Error ? error.stack : undefined
+          )
+        }
       })
     }
     return stream

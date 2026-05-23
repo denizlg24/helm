@@ -401,7 +401,7 @@ export const usageCredits = pgTable(
       .references(() => workspaces.id, { onDelete: "cascade" }),
     entryType: text("entry_type").notNull(),
     source: text("source").notNull(),
-    sourceRef: text("source_ref"),
+    sourceRef: text("source_ref").notNull(),
     amountUsdCents: integer("amount_usd_cents").notNull(),
     note: text("note"),
     createdAt: timestamp("created_at", { withTimezone: true })

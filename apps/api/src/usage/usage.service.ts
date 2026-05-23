@@ -181,52 +181,80 @@ export class UsageService {
     const cost = input.costUsdCents
     const usageId = crypto.randomUUID()
 
-    const monthCostBefore =
-      allowance !== undefined && cost > 0
-        ? await this.getMonthCostUsdCents(authContext.workspaceId, bounds)
-        : 0
+    await db.transaction(
+      async (tx) => {
+        const monthCostBefore =
+          allowance !== undefined && cost > 0
+            ? await this.getMonthCostUsdCentsInTx(
+                tx,
+                authContext.workspaceId,
+                bounds
+              )
+            : 0
 
-    let debit = 0
-    if (allowance !== undefined && cost > 0) {
-      const overflowBefore = Math.max(0, monthCostBefore - allowance)
-      const overflowAfter = Math.max(0, monthCostBefore + cost - allowance)
-      debit = overflowAfter - overflowBefore
-    }
+        let debit = 0
+        if (allowance !== undefined && cost > 0) {
+          const overflowBefore = Math.max(0, monthCostBefore - allowance)
+          const overflowAfter = Math.max(0, monthCostBefore + cost - allowance)
+          debit = overflowAfter - overflowBefore
+        }
 
-    await db.transaction(async (tx) => {
-      await tx.insert(llmUsage).values({
-        id: usageId,
-        tenantId: authContext.tenantId,
-        workspaceId: authContext.workspaceId,
-        userId: input.userId ?? authContext.userId,
-        provider: input.provider,
-        model: input.model,
-        inputTokens: input.inputTokens,
-        outputTokens: input.outputTokens,
-        costUsdCents: cost,
-      })
-
-      if (debit > 0) {
-        await tx.insert(usageCredits).values({
-          id: crypto.randomUUID(),
+        await tx.insert(llmUsage).values({
+          id: usageId,
           tenantId: authContext.tenantId,
           workspaceId: authContext.workspaceId,
-          entryType: "debit",
-          source: "usage",
-          sourceRef: usageId,
-          amountUsdCents: -debit,
+          userId: input.userId ?? authContext.userId,
+          provider: input.provider,
+          model: input.model,
+          inputTokens: input.inputTokens,
+          outputTokens: input.outputTokens,
+          costUsdCents: Math.round(cost),
         })
+
+        if (debit > 0) {
+          await tx.insert(usageCredits).values({
+            id: crypto.randomUUID(),
+            tenantId: authContext.tenantId,
+            workspaceId: authContext.workspaceId,
+            entryType: "debit",
+            source: "usage",
+            sourceRef: usageId,
+            amountUsdCents: Math.round(-debit),
+          })
+        }
+      },
+      {
+        isolationLevel: "serializable",
       }
-    })
+    )
 
     return usageId
+  }
+
+  private async getMonthCostUsdCentsInTx(
+    tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+    workspaceId: string,
+    bounds: MonthBounds
+  ): Promise<number> {
+    const rows = await tx
+      .select({ cost: sum(llmUsage.costUsdCents) })
+      .from(llmUsage)
+      .where(
+        and(
+          eq(llmUsage.workspaceId, workspaceId),
+          gte(llmUsage.createdAt, bounds.start),
+          lt(llmUsage.createdAt, bounds.end)
+        )
+      )
+
+    return toInt(rows[0]?.cost)
   }
 
   async grant(
     authContext: AuthContext,
     input: GrantUsageCreditInput
   ): Promise<number> {
-    await db
+    const insertResult = await db
       .insert(usageCredits)
       .values({
         id: crypto.randomUUID(),
@@ -242,15 +270,17 @@ export class UsageService {
         target: [usageCredits.source, usageCredits.sourceRef],
       })
 
-    await this.auditService.write(authContext, {
-      action: "usage.credit.grant",
-      resourceType: "usage_credit",
-      resourceId: input.sourceRef,
-      metadataJson: {
-        amountUsdCents: input.amountUsdCents,
-        source: input.source,
-      },
-    })
+    if (insertResult.rowCount && insertResult.rowCount > 0) {
+      await this.auditService.write(authContext, {
+        action: "usage.credit.grant",
+        resourceType: "usage_credit",
+        resourceId: input.sourceRef,
+        metadataJson: {
+          amountUsdCents: input.amountUsdCents,
+          source: input.source,
+        },
+      })
+    }
 
     return this.getCreditBalanceUsdCents(authContext.workspaceId)
   }

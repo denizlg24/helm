@@ -27,7 +27,12 @@ export class EntitlementService {
   async getWorkspaceLimits(workspaceId: string): Promise<WorkspaceLimits> {
     const row = await this.getActiveRow(workspaceId)
     const parsed = WorkspaceLimitsSchema.safeParse(row?.limitsJson ?? {})
-    return parsed.success ? parsed.data : {}
+    if (!parsed.success) {
+      throw new Error(
+        `Invalid persisted limits for workspace ${workspaceId}: ${parsed.error.toString()}`
+      )
+    }
+    return parsed.data
   }
 
   async hasFeature(workspaceId: string, feature: string) {

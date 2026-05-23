@@ -62,14 +62,28 @@ export interface NormalizedUsage {
   costUsdCents: number
 }
 
-export const inferProvider = (model: string): LlmProvider =>
-  model.startsWith("claude-") ? "anthropic" : "openai"
+export const inferProvider = (model: string): LlmProvider => {
+  if (model.startsWith("claude-")) {
+    return "anthropic"
+  }
+  if (
+    model.startsWith("gpt-") ||
+    model.startsWith("o1-") ||
+    model.startsWith("o3-")
+  ) {
+    return "openai"
+  }
+  throw new Error(`Unsupported model: ${model}`)
+}
 
 export const computeAnthropicUsage = (
   model: string,
   usage: Anthropic.Usage
 ): NormalizedUsage => {
-  const price = MODEL_PRICES[model] ?? OPUS_PRICE
+  const price = MODEL_PRICES[model]
+  if (!price) {
+    throw new Error(`Unsupported model: ${model}`)
+  }
   const uncachedInput = usage.input_tokens ?? 0
   const cacheRead = usage.cache_read_input_tokens ?? 0
   const cacheWrite = usage.cache_creation_input_tokens ?? 0
@@ -86,7 +100,7 @@ export const computeAnthropicUsage = (
   return {
     inputTokens: uncachedInput + cacheRead + cacheWrite,
     outputTokens: output,
-    costUsdCents: Math.round(cents),
+    costUsdCents: cents,
   }
 }
 
@@ -94,7 +108,10 @@ export const computeOpenAIUsage = (
   model: string,
   usage: ResponseUsage
 ): NormalizedUsage => {
-  const price = MODEL_PRICES[model] ?? GPT_5_PRICE
+  const price = MODEL_PRICES[model]
+  if (!price) {
+    throw new Error(`Unsupported model: ${model}`)
+  }
   const input = usage.input_tokens
   const cachedInput = usage.input_tokens_details.cached_tokens
   const uncachedInput = Math.max(0, input - cachedInput)
@@ -110,6 +127,6 @@ export const computeOpenAIUsage = (
   return {
     inputTokens: input,
     outputTokens: output,
-    costUsdCents: Math.round(cents),
+    costUsdCents: cents,
   }
 }

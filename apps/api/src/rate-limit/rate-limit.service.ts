@@ -37,7 +37,26 @@ export class RateLimitService {
       .pexpire(redisKey, windowMs)
       .exec()
 
-    const count = toCount(results?.[2]?.[1])
+    if (!results || results.length < 3) {
+      return {
+        allowed: false,
+        limit: max,
+        remaining: 0,
+        resetMs: windowMs,
+      }
+    }
+
+    const zcardResult = results[2]
+    if (zcardResult && zcardResult[0] instanceof Error) {
+      return {
+        allowed: false,
+        limit: max,
+        remaining: 0,
+        resetMs: windowMs,
+      }
+    }
+
+    const count = toCount(zcardResult?.[1])
     const allowed = count <= max
 
     if (!allowed) {
