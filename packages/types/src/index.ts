@@ -123,10 +123,25 @@ export const DeviceActivationStatusSchema = z.object({
   status: z.enum(["pending", "approved", "denied", "expired"]),
 })
 
+export const ApiTokenRateLimitSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    maxRequests: z.number().int().positive().optional(),
+    timeWindowMs: z.number().int().positive().optional(),
+  })
+  .refine(
+    (obj: { enabled?: boolean; maxRequests?: number; timeWindowMs?: number }) => Object.values(obj).some((v) => v !== undefined),
+    {
+      message:
+        "rateLimit must contain at least one of: enabled, maxRequests, timeWindowMs",
+    }
+  )
+
 export const CreateApiTokenInputSchema = z.object({
   name: z.string().min(1).max(120),
   scopes: z.array(ApiScopeSchema).min(1),
   expiresIn: z.number().int().positive().optional(),
+  rateLimit: ApiTokenRateLimitSchema.optional(),
 })
 
 export const RevokeDeviceInputSchema = z.object({
@@ -137,10 +152,76 @@ export const UpdateApiTokenInputSchema = z
   .object({
     name: z.string().min(1).max(120).optional(),
     scopes: z.array(ApiScopeSchema).min(1).optional(),
+    rateLimit: ApiTokenRateLimitSchema.optional(),
   })
-  .refine((input) => input.name !== undefined || input.scopes !== undefined, {
-    message: "At least one API token field must be provided",
-  })
+  .refine(
+    (input: { name?: string; scopes?: string[]; rateLimit?: z.infer<typeof ApiTokenRateLimitSchema> }) =>
+      input.name !== undefined ||
+      input.scopes !== undefined ||
+      input.rateLimit !== undefined,
+    {
+      message: "At least one API token field must be provided",
+    }
+  )
+
+export const WorkspaceLimitsSchema = z.object({
+  llmCostUsdCentsPerMonth: z.number().int().nonnegative().optional(),
+  rateLimitPerMinute: z.number().int().positive().optional(),
+})
+
+export const LlmUsageSchema = z.object({
+  id: z.string().min(1),
+  tenantId: z.string().min(1),
+  workspaceId: z.string().min(1),
+  userId: z.string().min(1).nullable().optional(),
+  provider: z.string().min(1),
+  model: z.string().min(1),
+  inputTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+  costUsdCents: z.number().int().nonnegative(),
+  createdAt: z.coerce.date(),
+})
+
+export const RecordLlmUsageInputSchema = z.object({
+  provider: z.string().min(1),
+  model: z.string().min(1),
+  inputTokens: z.number().int().nonnegative().default(0),
+  outputTokens: z.number().int().nonnegative().default(0),
+  costUsdCents: z.number().nonnegative().default(0),
+  userId: z.string().min(1).nullable().optional(),
+})
+
+export const UsageCreditEntryTypeSchema = z.enum([
+  "grant",
+  "debit",
+  "adjustment",
+])
+export const UsageCreditSourceSchema = z.enum([
+  "stripe",
+  "manual",
+  "usage",
+  "system",
+])
+
+export const GrantUsageCreditInputSchema = z.object({
+  amountUsdCents: z.number().int().positive(),
+  source: UsageCreditSourceSchema.default("manual"),
+  sourceRef: z.string().min(1),
+  note: z.string().max(500).optional(),
+})
+
+export const UsageSummarySchema = z.object({
+  periodStart: z.coerce.date(),
+  periodEnd: z.coerce.date(),
+  monthlyAllowanceUsdCents: z.number().int().nonnegative().nullable(),
+  monthCostUsdCents: z.number().int().nonnegative(),
+  monthRemainingAllowanceUsdCents: z.number().int().nonnegative().nullable(),
+  creditBalanceUsdCents: z.number().int(),
+  totalRemainingUsdCents: z.number().int().nullable(),
+  requestCount: z.number().int().nonnegative(),
+  inputTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+})
 
 export type WorkspaceRole = z.infer<typeof WorkspaceRoleSchema>
 export type Tenant = z.infer<typeof TenantSchema>
@@ -165,3 +246,11 @@ export type DeviceActivationStatus = z.infer<
 export type CreateApiTokenInput = z.infer<typeof CreateApiTokenInputSchema>
 export type RevokeDeviceInput = z.infer<typeof RevokeDeviceInputSchema>
 export type UpdateApiTokenInput = z.infer<typeof UpdateApiTokenInputSchema>
+export type ApiTokenRateLimit = z.infer<typeof ApiTokenRateLimitSchema>
+export type WorkspaceLimits = z.infer<typeof WorkspaceLimitsSchema>
+export type LlmUsage = z.infer<typeof LlmUsageSchema>
+export type RecordLlmUsageInput = z.infer<typeof RecordLlmUsageInputSchema>
+export type UsageCreditEntryType = z.infer<typeof UsageCreditEntryTypeSchema>
+export type UsageCreditSource = z.infer<typeof UsageCreditSourceSchema>
+export type GrantUsageCreditInput = z.infer<typeof GrantUsageCreditInputSchema>
+export type UsageSummary = z.infer<typeof UsageSummarySchema>

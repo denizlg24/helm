@@ -21,6 +21,7 @@ export const helmPermissionStatement = {
   apiKey: ["create", "read", "update", "delete"],
   device: ["create", "read", "revoke"],
   billing: ["read", "manage"],
+  usage: ["read"],
   ...modulePermissionEntries,
 } as const
 
@@ -33,6 +34,7 @@ export const owner = helmAccessControl.newRole({
   apiKey: ["create", "read", "update", "delete"],
   device: ["create", "read", "revoke"],
   billing: ["read", "manage"],
+  usage: ["read"],
   ...modulePermissionEntries,
 })
 
@@ -43,6 +45,7 @@ export const admin = helmAccessControl.newRole({
   apiKey: ["create", "read", "update", "delete"],
   device: ["create", "read", "revoke"],
   billing: ["read", "manage"],
+  usage: ["read"],
 })
 
 export const member = helmAccessControl.newRole({
@@ -51,6 +54,7 @@ export const member = helmAccessControl.newRole({
   module: ["read"],
   device: ["read"],
   billing: ["read"],
+  usage: ["read"],
 })
 
 export const helmApiKeyPermissionStatement = {
@@ -58,5 +62,6 @@ export const helmApiKeyPermissionStatement = {
   module: ["read", "configure"],
   apiKey: ["read", "update"],
   device: ["read", "revoke"],
+  usage: ["read"],
   ...modulePermissionEntries,
 } as const

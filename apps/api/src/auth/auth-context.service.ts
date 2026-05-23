@@ -18,6 +18,35 @@ const headersFromRequest = (request: FastifyRequest) => {
   return headers
 }
 
+const permissionsToScopes = (permissions: unknown): string[] => {
+  let parsed: unknown = permissions
+  if (typeof parsed === "string") {
+    try {
+      parsed = JSON.parse(parsed)
+    } catch {
+      return []
+    }
+  }
+  if (!parsed || typeof parsed !== "object") {
+    return []
+  }
+
+  const scopes: string[] = []
+  for (const [resource, actions] of Object.entries(
+    parsed as Record<string, unknown>
+  )) {
+    if (!Array.isArray(actions)) {
+      continue
+    }
+    for (const action of actions) {
+      if (typeof action === "string") {
+        scopes.push(`${resource}:${action}`)
+      }
+    }
+  }
+  return scopes
+}
+
 @Injectable()
 export class AuthContextService {
   constructor(private readonly workspaceService: WorkspaceService) {}
@@ -44,17 +73,35 @@ export class AuthContextService {
       session.activeWorkspaceId ??
       undefined
 
-    const authMethod = request.headers[HELM_API_KEY_HEADER]
+    const apiKeyHeader = request.headers[HELM_API_KEY_HEADER]
+    const apiKey = Array.isArray(apiKeyHeader) ? apiKeyHeader[0] : apiKeyHeader
+
+    const authMethod = apiKey
       ? "api-key"
       : request.headers.authorization?.toString().startsWith("Bearer ")
         ? "device"
         : "session"
+
+    const scopes =
+      authMethod === "api-key" && apiKey
+        ? await this.resolveApiKeyScopes(apiKey)
+        : []
 
     return this.workspaceService.resolveAuthContext({
       userId: session.userId,
       sessionId: session.sessionId,
       workspaceId,
       authMethod,
+      scopes,
     })
+  }
+
+  private async resolveApiKeyScopes(key: string): Promise<string[]> {
+    try {
+      const result = await auth.api.verifyApiKey({ body: { key } })
+      return permissionsToScopes(result.key?.permissions)
+    } catch {
+      return []
+    }
   }
 }

@@ -26,6 +26,7 @@ interface ResolveAuthContextInput {
   sessionId?: string
   workspaceId?: string
   authMethod: AuthContext["authMethod"]
+  scopes?: string[]
 }
 
 const normalizeRole = (role: string): AuthContext["role"] => {
@@ -87,7 +88,7 @@ export class WorkspaceService {
       tenantId: selected.workspace.tenantId,
       role: normalizeRole(selected.role),
       authMethod: input.authMethod,
-      scopes: [],
+      scopes: input.scopes ?? [],
       enabledModules: enabledModules.map((row) => row.moduleId),
       entitlements: workspaceEntitlements,
     }

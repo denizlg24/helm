@@ -15,4 +15,5 @@ export const HELM_AUTH_SCOPES = {
   apiKeyWrite: "api-key:write",
   deviceRead: "device:read",
   deviceRevoke: "device:revoke",
+  usageRead: "usage:read",
 } as const
