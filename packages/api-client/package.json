@@ -14,7 +14,9 @@
     "format": "biome format --write ."
   },
   "dependencies": {
-    "@workspace/types": "workspace:*"
+    "@workspace/auth": "workspace:*",
+    "@workspace/types": "workspace:*",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@workspace/typescript-config": "workspace:*",

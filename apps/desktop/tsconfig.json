@@ -9,6 +9,8 @@
     "jsx": "react-jsx",
     "allowImportingTsExtensions": true,
     "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
     "isolatedModules": true,
     "skipLibCheck": true,
     "strict": true,

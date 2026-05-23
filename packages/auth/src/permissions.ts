@@ -1,0 +1,70 @@
+import { moduleDefinitions } from "@workspace/module-registry"
+import { createAccessControl } from "better-auth/plugins/access"
+import {
+  adminAc,
+  defaultStatements,
+  memberAc,
+  ownerAc,
+} from "better-auth/plugins/organization/access"
+
+export const helmPermissionStatement = {
+  ...defaultStatements,
+  workspace: ["read", "update", "delete"],
+  module: ["read", "enable", "disable", "configure"],
+  apiKey: ["create", "read", "update", "delete"],
+  device: ["create", "read", "revoke"],
+  billing: ["read", "manage"],
+  ...Object.fromEntries(
+    moduleDefinitions.map((moduleDefinition) => [
+      moduleDefinition.id,
+      ["read", "write", "delete", "admin"],
+    ])
+  ),
+} as const
+
+export const helmAccessControl = createAccessControl(helmPermissionStatement)
+
+export const owner = helmAccessControl.newRole({
+  ...ownerAc.statements,
+  workspace: ["read", "update", "delete"],
+  module: ["read", "enable", "disable", "configure"],
+  apiKey: ["create", "read", "update", "delete"],
+  device: ["create", "read", "revoke"],
+  billing: ["read", "manage"],
+  ...Object.fromEntries(
+    moduleDefinitions.map((moduleDefinition) => [
+      moduleDefinition.id,
+      ["read", "write", "delete", "admin"],
+    ])
+  ),
+})
+
+export const admin = helmAccessControl.newRole({
+  ...adminAc.statements,
+  workspace: ["read", "update"],
+  module: ["read", "enable", "disable", "configure"],
+  apiKey: ["create", "read", "update", "delete"],
+  device: ["create", "read", "revoke"],
+  billing: ["read", "manage"],
+})
+
+export const member = helmAccessControl.newRole({
+  ...memberAc.statements,
+  workspace: ["read"],
+  module: ["read"],
+  device: ["read"],
+  billing: ["read"],
+})
+
+export const helmApiKeyPermissionStatement = {
+  workspace: ["read", "update"],
+  module: ["read", "configure"],
+  apiKey: ["read", "update"],
+  device: ["read", "revoke"],
+  ...Object.fromEntries(
+    moduleDefinitions.map((moduleDefinition) => [
+      moduleDefinition.id,
+      ["read", "write", "delete", "admin"],
+    ])
+  ),
+} as const

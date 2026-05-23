@@ -1,0 +1,7 @@
+export const IS_PUBLIC_KEY = "helm:isPublic"
+export const REQUIRE_WORKSPACE_KEY = "helm:requireWorkspace"
+export const REQUIRE_MODULE_KEY = "helm:requireModule"
+export const REQUIRE_SCOPES_KEY = "helm:requireScopes"
+export const REQUIRE_ENTITLEMENT_KEY = "helm:requireEntitlement"
+export const AUDIT_SENSITIVE_KEY = "helm:auditSensitive"
+export const AUTH_CONTEXT_KEY = "helmAuthContext"

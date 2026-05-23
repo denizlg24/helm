@@ -2,12 +2,32 @@
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
   "remoteCache": {
-    "signature": true,
+    "signature": true
   },
+  "globalEnv": [
+    "DATABASE_URL",
+    "BETTER_AUTH_SECRET",
+    "HELM_AUTH_BASE_URL",
+    "HELM_API_URL",
+    "HELM_CONSOLE_URL",
+    "HELM_WEB_URL",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "NEXT_PUBLIC_HELM_API_URL",
+    "VITE_HELM_API_URL",
+    "HELM_COOKIE_DOMAIN",
+    "HELM_SECURE_COOKIES",
+    "HELM_DESKTOP_CALLBACK_ORIGIN",
+    "HELM_DEVICE_CLIENT_ID",
+    "REDIS_URL",
+    "TAURI_DEV_HOST",
+    "PORT"
+  ],
+  "globalPassThroughEnv": ["NODE_ENV", "CI"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*", "../../.env*"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
     "lint": {

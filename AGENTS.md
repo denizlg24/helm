@@ -76,6 +76,7 @@ packages/typescript-config Shared TS configs (base, nextjs, react-library)
 - All shared components go in `packages/ui`.
 - Web and desktop reuse the same React components where practical.
 - 10 color themes already exist in `packages/ui/src/styles/themes/`. Workspace theme is a user setting.
+- Minimalistic / Editorial design pattern SaaS inspired.
 
 ---
 
@@ -90,13 +91,9 @@ packages/typescript-config Shared TS configs (base, nextjs, react-library)
 
 ---
 
-## Current state (as of 2026-05-22)
+## Current state (as of 2026-05-23)
 
-All apps and packages are **scaffolded stubs**. No real logic exists yet.
-
-Already done: Turborepo wiring, Biome config, commitlint, husky, TypeScript configs, `packages/ui` with shadcn primitives + Tailwind + 10 themes, branding assets across all apps.
-
-Everything else is an empty export or empty component.
+Scaffolded Authentication.
 
 **Recommended build order:**
 1. `packages/types` — Zod schemas for all entities
