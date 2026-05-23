@@ -1,39 +1,69 @@
 "use client"
 
+import { zodResolver } from "@hookform/resolvers/zod"
+import {
+  AuthAside,
+  AuthHeader,
+  AuthShell,
+} from "@workspace/ui/components/auth-shell"
+import { Button } from "@workspace/ui/components/button"
+import { FieldGroup } from "@workspace/ui/components/field"
+import { OtpField } from "@workspace/ui/components/form-field"
+import { toast } from "@workspace/ui/components/sonner"
+import { Spinner } from "@workspace/ui/components/spinner"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Suspense, useEffect, useState } from "react"
+import { Suspense, useState } from "react"
+import { useForm } from "react-hook-form"
+import { z } from "zod"
 import { authClient } from "../../lib/auth-client"
 
-type Outcome =
-  | { kind: "idle" }
-  | { kind: "approving" }
-  | { kind: "approved" }
-  | { kind: "denied" }
-  | { kind: "error"; message: string }
+const normalizeCode = (value: string) =>
+  value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase()
 
-function DevicePage() {
+const DeviceSchema = z.object({
+  code: z
+    .string()
+    .transform(normalizeCode)
+    .pipe(z.string().length(8, "Enter the full 8-character code")),
+})
+
+type DeviceValues = { code: string }
+
+type Outcome = "pending" | "approved" | "denied"
+
+function CenteredSpinner() {
+  return (
+    <div className="flex min-h-svh items-center justify-center">
+      <Spinner className="size-5 text-muted-foreground" />
+    </div>
+  )
+}
+
+function DeviceForm() {
   const router = useRouter()
   const params = useSearchParams()
-  const queryCode = params.get("user_code") ?? ""
-  const [code, setCode] = useState(queryCode)
-  const [outcome, setOutcome] = useState<Outcome>({ kind: "idle" })
+  const prefilled = normalizeCode(params.get("user_code") ?? "")
   const { data: session, isPending } = authClient.useSession()
+  const [outcome, setOutcome] = useState<Outcome>("pending")
+  const [activeAction, setActiveAction] = useState<"approve" | "deny" | null>(
+    null
+  )
 
-  useEffect(() => {
-    if (!isPending && !session) {
-      const nextTarget = queryCode
-        ? `/device?user_code=${encodeURIComponent(queryCode)}`
-        : "/device"
-      router.replace(`/sign-in?next=${encodeURIComponent(nextTarget)}`)
-    }
-  }, [isPending, session, queryCode, router])
+  const form = useForm<DeviceValues>({
+    resolver: zodResolver(DeviceSchema),
+    defaultValues: { code: prefilled },
+  })
 
-  if (isPending || !session) {
-    return (
-      <main style={{ fontFamily: "system-ui", padding: "2rem" }}>
-        <p>Loading…</p>
-      </main>
-    )
+  if (isPending) {
+    return <CenteredSpinner />
+  }
+
+  if (!session) {
+    const nextTarget = prefilled
+      ? `/device?user_code=${encodeURIComponent(prefilled)}`
+      : "/device"
+    router.replace(`/sign-in?next=${encodeURIComponent(nextTarget)}`)
+    return <CenteredSpinner />
   }
 
   const claim = async (userCode: string) => {
@@ -42,116 +72,109 @@ function DevicePage() {
       return (
         result.error.error_description ??
         result.error.error ??
-        "Could not verify code"
+        "Could not verify this code"
       )
     }
     return null
   }
 
-  const approve = async () => {
-    const userCode = code.trim()
-    setOutcome({ kind: "approving" })
-    const claimError = await claim(userCode)
-    if (claimError) {
-      setOutcome({ kind: "error", message: claimError })
-      return
-    }
-    const result = await authClient.device.approve({ userCode })
-    if (result.error) {
-      setOutcome({
-        kind: "error",
-        message:
+  const decide = async (decision: "approve" | "deny") => {
+    setActiveAction(decision)
+    try {
+      const userCode = normalizeCode(form.getValues("code"))
+      const claimError = await claim(userCode)
+      if (claimError) {
+        toast.error(claimError)
+        return
+      }
+      const result =
+        decision === "approve"
+          ? await authClient.device.approve({ userCode })
+          : await authClient.device.deny({ userCode })
+      if (result.error) {
+        toast.error(
           result.error.error_description ??
-          result.error.error ??
-          "Approval failed",
-      })
-      return
+            result.error.error ??
+            (decision === "approve" ? "Approval failed" : "Denial failed")
+        )
+        return
+      }
+      setOutcome(decision === "approve" ? "approved" : "denied")
+    } finally {
+      setActiveAction(null)
     }
-    setOutcome({ kind: "approved" })
   }
 
-  const deny = async () => {
-    const userCode = code.trim()
-    setOutcome({ kind: "approving" })
-    const claimError = await claim(userCode)
-    if (claimError) {
-      setOutcome({ kind: "error", message: claimError })
-      return
-    }
-    const result = await authClient.device.deny({ userCode })
-    if (result.error) {
-      setOutcome({
-        kind: "error",
-        message:
-          result.error.error_description ??
-          result.error.error ??
-          "Denial failed",
-      })
-      return
-    }
-    setOutcome({ kind: "denied" })
-  }
+  const onApprove = form.handleSubmit(() => decide("approve"))
+  const onDeny = form.handleSubmit(() => decide("deny"))
+  const pending = form.formState.isSubmitting
 
   return (
-    <main style={{ fontFamily: "system-ui", padding: "2rem", maxWidth: 520 }}>
-      <h1>Device activation</h1>
-      <p>
-        Signed in as <strong>{session.user.email}</strong>.
-      </p>
-      {outcome.kind === "approved" ? (
-        <section>
-          <p>Device approved. You can return to the desktop app.</p>
-        </section>
-      ) : outcome.kind === "denied" ? (
-        <section>
-          <p>Device denied.</p>
-        </section>
+    <AuthShell
+      aside={
+        <AuthAside
+          attribution="Helm"
+          quote="Connect a device once. Steer it from anywhere."
+        />
+      }
+    >
+      {outcome === "approved" ? (
+        <AuthHeader
+          description="Device approved. Return to the desktop app to finish — you can close this tab."
+          title="Device connected"
+        />
+      ) : outcome === "denied" ? (
+        <AuthHeader
+          description="The request was denied. No device was connected."
+          title="Request denied"
+        />
       ) : (
-        <form
-          onSubmit={(event) => {
-            event.preventDefault()
-            void approve()
-          }}
-        >
-          <p>Enter the code shown on the desktop app.</p>
-          <input
-            name="userCode"
-            placeholder="ABCD-EFGH"
-            value={code}
-            onChange={(event) => setCode(event.target.value)}
-            required
+        <>
+          <AuthHeader
+            description={`Signed in as ${session.user.email}. Confirm the code shown on the desktop app.`}
+            title="Activate device"
           />
-          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
-            <button type="submit" disabled={outcome.kind === "approving"}>
-              Approve
-            </button>
-            <button
-              type="button"
-              onClick={() => void deny()}
-              disabled={outcome.kind === "approving"}
-            >
-              Deny
-            </button>
-          </div>
-        </form>
+          <form className="" noValidate onSubmit={onApprove}>
+            <FieldGroup className="mx-auto items-center">
+              <OtpField
+                control={form.control}
+                disabled={pending}
+                name="code"
+                containerClassName="justify-center"
+                pattern="^[a-zA-Z0-9]*$"
+              />
+              <Button
+                className="w-full"
+                disabled={pending}
+                loading={activeAction === "approve"}
+                size="lg"
+                type="submit"
+              >
+                Approve device
+              </Button>
+              <Button
+                className="w-full"
+                disabled={pending}
+                loading={activeAction === "deny"}
+                onClick={onDeny}
+                size="lg"
+                type="button"
+                variant="ghost"
+              >
+                Deny
+              </Button>
+            </FieldGroup>
+          </form>
+        </>
       )}
-      {outcome.kind === "error" ? (
-        <p style={{ color: "crimson" }}>{outcome.message}</p>
-      ) : null}
-    </main>
+    </AuthShell>
   )
 }
 
 export default function Page() {
   return (
-    <Suspense
-      fallback={
-        <main style={{ fontFamily: "system-ui", padding: "2rem" }}>
-          <p>Loading...</p>
-        </main>
-      }
-    >
-      <DevicePage />
+    <Suspense fallback={<CenteredSpinner />}>
+      <DeviceForm />
     </Suspense>
   )
 }

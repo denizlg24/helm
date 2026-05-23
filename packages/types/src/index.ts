@@ -130,7 +130,8 @@ export const ApiTokenRateLimitSchema = z
     timeWindowMs: z.number().int().positive().optional(),
   })
   .refine(
-    (obj: { enabled?: boolean; maxRequests?: number; timeWindowMs?: number }) => Object.values(obj).some((v) => v !== undefined),
+    (obj: { enabled?: boolean; maxRequests?: number; timeWindowMs?: number }) =>
+      Object.values(obj).some((v) => v !== undefined),
     {
       message:
         "rateLimit must contain at least one of: enabled, maxRequests, timeWindowMs",
@@ -155,7 +156,11 @@ export const UpdateApiTokenInputSchema = z
     rateLimit: ApiTokenRateLimitSchema.optional(),
   })
   .refine(
-    (input: { name?: string; scopes?: string[]; rateLimit?: z.infer<typeof ApiTokenRateLimitSchema> }) =>
+    (input: {
+      name?: string
+      scopes?: string[]
+      rateLimit?: z.infer<typeof ApiTokenRateLimitSchema>
+    }) =>
       input.name !== undefined ||
       input.scopes !== undefined ||
       input.rateLimit !== undefined,

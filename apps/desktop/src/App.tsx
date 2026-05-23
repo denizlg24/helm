@@ -1,17 +1,28 @@
 import { openUrl } from "@tauri-apps/plugin-opener"
-import { createHelmApiClient } from "@workspace/api-client"
+import { createHelmApiClient, ForbiddenError } from "@workspace/api-client"
+import { AuthHeader, Wordmark } from "@workspace/ui/components/auth-shell"
+import { Button } from "@workspace/ui/components/button"
+import { Spinner } from "@workspace/ui/components/spinner"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createDesktopAuthClient } from "./lib/auth-client"
 import { keychain } from "./lib/keychain"
 
 const CLIENT_ID = "helm-desktop"
 const API_URL = import.meta.env.VITE_HELM_API_URL ?? "http://localhost:3003"
+const CONSOLE_URL =
+  import.meta.env.VITE_HELM_CONSOLE_URL ?? "http://localhost:3002"
+const ONBOARDING_URL = `${CONSOLE_URL}/onboarding/workspace`
 
 interface SessionUser {
   id: string
   email?: string
   name?: string
 }
+
+type SessionResult =
+  | { kind: "ok"; user: SessionUser }
+  | { kind: "needs-onboarding" }
+  | { kind: "invalid" }
 
 type Activation = {
   device_code: string
@@ -26,23 +37,30 @@ type Status =
   | { kind: "idle" }
   | { kind: "activating"; activation: Activation }
   | { kind: "connected"; user: SessionUser }
+  | { kind: "needs-onboarding" }
   | { kind: "error"; message: string }
 
-const fetchSession = async (token: string): Promise<SessionUser | null> => {
+const fetchSession = async (token: string): Promise<SessionResult> => {
   const apiClient = createHelmApiClient({
     baseUrl: API_URL,
     getAuthHeaders: () => ({ Authorization: `Bearer ${token}` }),
   })
   try {
     const response = await apiClient.user.current()
-    return response.user
-  } catch {
-    return null
+    return { kind: "ok", user: response.user }
+  } catch (error) {
+    // /api/me only fails with 403 when the account has no workspace yet.
+    if (error instanceof ForbiddenError) {
+      return { kind: "needs-onboarding" }
+    }
+    return { kind: "invalid" }
   }
 }
 
 export function App() {
   const [status, setStatus] = useState<Status>({ kind: "idle" })
+  const [starting, setStarting] = useState(false)
+  const [rechecking, setRechecking] = useState(false)
   const pollRef = useRef<number | null>(null)
   const tokenRef = useRef<string | null>(null)
   const pollingRef = useRef(false)
@@ -55,33 +73,70 @@ export function App() {
     pollingRef.current = false
   }, [])
 
+  const applySession = useCallback(async (token: string) => {
+    const result = await fetchSession(token)
+    if (result.kind === "ok") {
+      setStatus({ kind: "connected", user: result.user })
+      return
+    }
+    if (result.kind === "needs-onboarding") {
+      setStatus({ kind: "needs-onboarding" })
+      return
+    }
+    await keychain.clearToken()
+    tokenRef.current = null
+    setStatus({
+      kind: "error",
+      message: "This device's session expired. Activate it again.",
+    })
+  }, [])
+
   useEffect(() => {
     void (async () => {
       const stored = await keychain.getToken()
       if (!stored) return
       tokenRef.current = stored
-      const user = await fetchSession(stored)
-      if (user) {
-        setStatus({ kind: "connected", user })
+      const result = await fetchSession(stored)
+      if (result.kind === "ok") {
+        setStatus({ kind: "connected", user: result.user })
+      } else if (result.kind === "needs-onboarding") {
+        setStatus({ kind: "needs-onboarding" })
       } else {
         await keychain.clearToken()
+        tokenRef.current = null
       }
     })()
     return stopPolling
   }, [stopPolling])
 
+  const recheck = useCallback(async () => {
+    const token = tokenRef.current
+    if (!token) {
+      return
+    }
+    setRechecking(true)
+    try {
+      await applySession(token)
+    } finally {
+      setRechecking(false)
+    }
+  }, [applySession])
+
   const activate = useCallback(async () => {
     stopPolling()
     setStatus({ kind: "idle" })
+    setStarting(true)
     const client = createDesktopAuthClient()
     const { data, error } = await client.device.code({ client_id: CLIENT_ID })
     if (error || !data) {
+      setStarting(false)
       const message =
         error?.error_description ?? error?.error ?? "Failed to start activation"
       setStatus({ kind: "error", message })
       return
     }
     const activation: Activation = data
+    setStarting(false)
     setStatus({ kind: "activating", activation })
     const openTarget =
       activation.verification_uri_complete ?? activation.verification_uri
@@ -135,19 +190,11 @@ export function App() {
       stopPolling()
       tokenRef.current = token
       await keychain.setToken(token)
-      const user = await fetchSession(token)
-      if (!user) {
-        setStatus({
-          kind: "error",
-          message: "Connected but session lookup failed",
-        })
-        return
-      }
-      setStatus({ kind: "connected", user })
+      await applySession(token)
     }
 
     pollRef.current = window.setTimeout(() => void poll(), intervalMs)
-  }, [stopPolling])
+  }, [stopPolling, applySession])
 
   const disconnect = useCallback(async () => {
     stopPolling()
@@ -157,59 +204,137 @@ export function App() {
   }, [stopPolling])
 
   return (
-    <main style={{ fontFamily: "system-ui", padding: "2rem", maxWidth: 560 }}>
-      <h1>Helm Desktop</h1>
+    <main className="flex min-h-svh items-center justify-center px-6 py-12">
+      <div className="w-full max-w-sm">
+        <Wordmark className="mb-8" />
 
-      {status.kind === "connected" ? (
-        <section>
-          <p>
-            Connected as <strong>{status.user.email ?? status.user.id}</strong>
-          </p>
-          <button type="button" onClick={() => void disconnect()}>
-            Disconnect
-          </button>
-        </section>
-      ) : (
-        <section>
-          <p>Activate this device by signing in on the console.</p>
-          <button type="button" onClick={() => void activate()}>
-            Activate device
-          </button>
-        </section>
-      )}
-
-      {status.kind === "activating" ? (
-        <section style={{ marginTop: "1.5rem" }}>
-          <p>
-            Enter this code on{" "}
-            <a
-              href={status.activation.verification_uri}
-              onClick={(event) => {
-                event.preventDefault()
-                void openUrl(status.activation.verification_uri)
-              }}
+        {status.kind === "connected" ? (
+          <>
+            <AuthHeader
+              description={`Connected as ${status.user.email ?? status.user.id}.`}
+              title="Device connected"
+              wordmark={false}
+            />
+            <Button
+              className="w-full"
+              onClick={() => void disconnect()}
+              size="lg"
+              type="button"
+              variant="outline"
             >
-              {status.activation.verification_uri}
-            </a>
-          </p>
-          <p
-            style={{
-              fontSize: "2rem",
-              letterSpacing: "0.25rem",
-              fontFamily: "monospace",
-            }}
-          >
-            {status.activation.user_code}
-          </p>
-          <p>Waiting for approval…</p>
-        </section>
-      ) : null}
+              Disconnect
+            </Button>
+          </>
+        ) : status.kind === "needs-onboarding" ? (
+          <>
+            <AuthHeader
+              description="This device is linked to your account, but you haven't set up a workspace yet. Finish onboarding on the console, then check again."
+              title="Finish setting up"
+              wordmark={false}
+            />
+            <div className="flex flex-col gap-2">
+              <Button
+                className="w-full"
+                onClick={() => void openUrl(ONBOARDING_URL)}
+                size="lg"
+                type="button"
+              >
+                Open console to finish setup
+              </Button>
+              <Button
+                className="w-full"
+                loading={rechecking}
+                onClick={() => void recheck()}
+                size="lg"
+                type="button"
+                variant="outline"
+              >
+                I've finished — check again
+              </Button>
+              <Button
+                className="w-full"
+                onClick={() => void disconnect()}
+                size="lg"
+                type="button"
+                variant="ghost"
+              >
+                Disconnect
+              </Button>
+            </div>
+          </>
+        ) : status.kind === "activating" ? (
+          <>
+            <AuthHeader
+              description={
+                <>
+                  Enter this code at{" "}
+                  <a
+                    className="font-medium text-foreground underline underline-offset-4 hover:text-primary"
+                    href={status.activation.verification_uri}
+                    onClick={(event) => {
+                      event.preventDefault()
+                      void openUrl(status.activation.verification_uri)
+                    }}
+                  >
+                    {status.activation.verification_uri}
+                  </a>
+                </>
+              }
+              title="Activate device"
+              wordmark={false}
+            />
+            <div className="flex justify-center gap-1.5">
+              {status.activation.user_code
+                .split("")
+                .map((char, index) => ({ char, id: index }))
+                .map(({ char, id }) =>
+                  /[a-zA-Z0-9]/.test(char) ? (
+                    <span
+                      className="flex h-12 w-10 items-center justify-center rounded-md border border-border bg-secondary font-medium font-mono text-foreground text-xl uppercase"
+                      key={id}
+                    >
+                      {char}
+                    </span>
+                  ) : (
+                    <span
+                      className="flex items-center text-muted-foreground"
+                      key={id}
+                    >
+                      {char}
+                    </span>
+                  )
+                )}
+            </div>
+            <p className="mt-6 flex items-center justify-center gap-2 text-muted-foreground text-sm">
+              <Spinner className="size-4" />
+              Waiting for approval…
+            </p>
+          </>
+        ) : (
+          <>
+            <AuthHeader
+              description="Activate this device by approving it on the console."
+              title="Activate this device"
+              wordmark={false}
+            />
+            <Button
+              className="w-full"
+              loading={starting}
+              onClick={() => void activate()}
+              size="lg"
+              type="button"
+            >
+              Activate device
+            </Button>
+          </>
+        )}
 
-      {status.kind === "error" ? (
-        <p style={{ color: "crimson", marginTop: "1.5rem" }}>
-          {status.message}
-        </p>
-      ) : null}
+        {status.kind === "error" ? (
+          <p className="mt-6 text-destructive text-sm" role="alert">
+            {status.message}
+          </p>
+        ) : null}
+      </div>
     </main>
   )
 }
