@@ -1,124 +1,151 @@
 "use client"
 
+import { zodResolver } from "@hookform/resolvers/zod"
+import {
+  AuthAside,
+  AuthFooter,
+  AuthHeader,
+  AuthShell,
+} from "@workspace/ui/components/auth-shell"
+import { Button } from "@workspace/ui/components/button"
+import { FieldGroup, FieldSeparator } from "@workspace/ui/components/field"
+import { TextField } from "@workspace/ui/components/form-field"
+import { toast } from "@workspace/ui/components/sonner"
 import { useSearchParams } from "next/navigation"
 import { Suspense, useState } from "react"
+import { useForm } from "react-hook-form"
+import { z } from "zod"
 import { authClient } from "../../lib/auth-client"
+import { buildNext, sanitizeRedirectPath, signUpHref } from "../../lib/redirect"
 
-const sanitizeRedirectPath = (value: string | null) => {
-  if (!value?.startsWith("/") || value.startsWith("//")) {
-    return "/"
-  }
-  return value
-}
+const SignInSchema = z.object({
+  email: z.string().min(1, "Email is required").email("Enter a valid email"),
+  password: z.string().min(1, "Password is required"),
+})
 
-function SignInPage() {
+type SignInValues = z.infer<typeof SignInSchema>
+
+function SignInForm() {
   const params = useSearchParams()
   const next = sanitizeRedirectPath(params.get("next"))
   const userCode = params.get("user_code")
-  const [error, setError] = useState<string | null>(null)
-  const [pending, setPending] = useState(false)
+  const [socialPending, setSocialPending] = useState(false)
 
-  const buildNext = () => {
-    if (next === "/device" && userCode) {
-      return `/device?user_code=${encodeURIComponent(userCode)}`
+  const form = useForm<SignInValues>({
+    resolver: zodResolver(SignInSchema),
+    defaultValues: { email: "", password: "" },
+  })
+
+  const target = buildNext(next, userCode)
+
+  const onSubmit = form.handleSubmit(async (values) => {
+    try {
+      const result = await authClient.signIn.email(values)
+      if (result.error) {
+        toast.error(result.error.message ?? "Sign in failed")
+        return
+      }
+      window.location.assign(target)
+    } catch {
+      toast.error("Sign in failed")
     }
-    return next
+  })
+
+  const continueWithGoogle = async () => {
+    setSocialPending(true)
+    try {
+      const result = await authClient.signIn.social({
+        provider: "google",
+        callbackURL: target,
+      })
+      if (result.error) {
+        toast.error(result.error.message ?? "Google sign-in failed")
+      }
+    } catch {
+      toast.error("Google sign-in failed")
+    } finally {
+      setSocialPending(false)
+    }
   }
 
+  const pending = form.formState.isSubmitting || socialPending
+
   return (
-    <main style={{ fontFamily: "system-ui", padding: "2rem", maxWidth: 480 }}>
-      <h1>Sign in</h1>
-      {userCode ? (
-        <p>
-          You are signing in to activate a device with code{" "}
-          <strong>{userCode}</strong>.
-        </p>
-      ) : null}
-      <form
-        onSubmit={async (event) => {
-          event.preventDefault()
-          setPending(true)
-          setError(null)
-          const formData = new FormData(event.currentTarget)
-          const result = await authClient.signIn.email({
-            email: String(formData.get("email") ?? ""),
-            password: String(formData.get("password") ?? ""),
-          })
-          setPending(false)
-          if (result.error) {
-            setError(result.error.message ?? "Sign in failed")
-            return
-          }
-          window.location.assign(buildNext())
-        }}
-      >
-        <div>
-          <input
+    <AuthShell
+      aside={
+        <AuthAside
+          attribution="Helm"
+          quote="Steer your whole day from a single, quiet surface."
+        />
+      }
+    >
+      <AuthHeader
+        description={
+          userCode
+            ? `Sign in to activate the device showing code ${userCode}.`
+            : "Welcome back. Sign in to your workspace."
+        }
+        title="Sign in"
+      />
+
+      <form noValidate onSubmit={onSubmit}>
+        <FieldGroup>
+          <TextField
+            autoComplete="email"
+            autoFocus
+            control={form.control}
+            disabled={pending}
+            label="Email"
             name="email"
-            placeholder="email@example.com"
+            placeholder="you@example.com"
             type="email"
-            required
           />
-        </div>
-        <div>
-          <input
+          <TextField
+            autoComplete="current-password"
+            control={form.control}
+            disabled={pending}
+            label="Password"
             name="password"
-            placeholder="Password"
+            placeholder="••••••••"
             type="password"
-            required
           />
-        </div>
-        <button type="submit" disabled={pending}>
-          {pending ? "Signing in…" : "Sign in"}
-        </button>
+          <Button
+            className="w-full"
+            disabled={pending}
+            loading={form.formState.isSubmitting}
+            size="lg"
+            type="submit"
+          >
+            Sign in
+          </Button>
+
+          <FieldSeparator>or</FieldSeparator>
+
+          <Button
+            className="w-full"
+            disabled={pending}
+            loading={socialPending}
+            onClick={continueWithGoogle}
+            size="lg"
+            type="button"
+            variant="outline"
+          >
+            Continue with Google
+          </Button>
+        </FieldGroup>
       </form>
-      {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-      <button
-        type="button"
-        disabled={pending}
-        onClick={async () => {
-          setPending(true)
-          setError(null)
-          const result = await authClient.signIn.social({
-            provider: "google",
-            callbackURL: buildNext(),
-          })
-          setPending(false)
-          if (result.error) {
-            console.error("Social sign-in failed", result.error)
-            setError(result.error.message ?? "Social sign-in failed")
-          }
-        }}
-      >
-        Continue with Google
-      </button>
-      <p>
-        <a
-          href={`/sign-up${
-            userCode
-              ? `?next=${encodeURIComponent(
-                  `/device?user_code=${encodeURIComponent(userCode)}`
-                )}`
-              : ""
-          }`}
-        >
-          Need an account? Sign up
-        </a>
-      </p>
-    </main>
+
+      <AuthFooter>
+        Need an account? <a href={signUpHref(userCode)}>Sign up</a>
+      </AuthFooter>
+    </AuthShell>
   )
 }
 
 export default function Page() {
   return (
-    <Suspense
-      fallback={
-        <main style={{ fontFamily: "system-ui", padding: "2rem" }}>
-          <p>Loading...</p>
-        </main>
-      }
-    >
-      <SignInPage />
+    <Suspense fallback={null}>
+      <SignInForm />
     </Suspense>
   )
 }

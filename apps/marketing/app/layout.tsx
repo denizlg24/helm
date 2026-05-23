@@ -1,4 +1,4 @@
-import "@workspace/ui/globals.css";
+import "@workspace/ui/globals.css"
 
 export default function RootLayout({
   children,
@@ -7,5 +7,5 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body>{children}</body>
     </html>
-  );
+  )
 }

@@ -1,11 +1,12 @@
-export default function Page() {
-  return (
-    <main>
-      <h1>Approve device</h1>
-      <p>
-        Device approval is handled by the Better Auth device authorization
-        endpoints.
-      </p>
-    </main>
+import { redirect } from "next/navigation"
+
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ user_code?: string }>
+}) {
+  const { user_code: userCode } = await searchParams
+  redirect(
+    userCode ? `/device?user_code=${encodeURIComponent(userCode)}` : "/device"
   )
 }

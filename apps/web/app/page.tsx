@@ -1,67 +1,69 @@
 "use client"
 
+import { Wordmark } from "@workspace/ui/components/auth-shell"
+import { Button } from "@workspace/ui/components/button"
+import { toast } from "@workspace/ui/components/sonner"
+import { Spinner } from "@workspace/ui/components/spinner"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
-import { z } from "zod"
+import { useEffect, useState } from "react"
 import { authClient } from "../lib/auth-client"
 
-const WebPageEnvSchema = z.object({
-  NEXT_PUBLIC_HELM_CONSOLE_URL: z
-    .string()
-    .url()
-    .default("http://localhost:3002"),
-})
-
-const env = WebPageEnvSchema.parse({
-  NEXT_PUBLIC_HELM_CONSOLE_URL: process.env.NEXT_PUBLIC_HELM_CONSOLE_URL,
-})
+function CenteredSpinner() {
+  return (
+    <div className="flex min-h-svh items-center justify-center">
+      <Spinner className="size-5 text-muted-foreground" />
+    </div>
+  )
+}
 
 export default function Page() {
   const router = useRouter()
   const { data: session, isPending } = authClient.useSession()
-  const [signOutError, setSignOutError] = useState<string | null>(null)
+  const [signingOut, setSigningOut] = useState(false)
+
+  useEffect(() => {
+    if (!isPending && !session) {
+      router.replace("/sign-in")
+    }
+  }, [isPending, session, router])
+
+  if (isPending || !session) {
+    return <CenteredSpinner />
+  }
+
+  const signOut = async () => {
+    setSigningOut(true)
+    const result = await authClient.signOut()
+    if (result.error) {
+      setSigningOut(false)
+      toast.error(result.error.message ?? "Sign out failed")
+      return
+    }
+    router.replace("/sign-in")
+  }
 
   return (
-    <main style={{ fontFamily: "system-ui", padding: "2rem", maxWidth: 640 }}>
-      <h1>Helm Dashboard</h1>
-      {isPending ? (
-        <p>Loading…</p>
-      ) : session ? (
-        <section>
-          <p>
-            Signed in as <strong>{session.user.email}</strong>
-          </p>
-          <button
-            type="button"
-            onClick={async () => {
-              setSignOutError(null)
-              const result = await authClient.signOut()
-              if (result.error) {
-                console.error("Sign out failed", result.error)
-                setSignOutError(result.error.message ?? "Sign out failed")
-                return
-              }
-              router.refresh()
-            }}
-          >
-            Sign out
-          </button>
-          {signOutError ? (
-            <p style={{ color: "crimson" }}>{signOutError}</p>
-          ) : null}
-        </section>
-      ) : (
-        <section>
-          <p>You are not signed in.</p>
-          <a
-            href={`${env.NEXT_PUBLIC_HELM_CONSOLE_URL}/sign-in?next=${encodeURIComponent(
-              "/"
-            )}`}
-          >
-            Sign in on the console
-          </a>
-        </section>
-      )}
-    </main>
+    <div className="flex min-h-svh flex-col">
+      <header className="flex items-center justify-between border-border border-b px-6 py-4 sm:px-10">
+        <Wordmark />
+        <Button
+          loading={signingOut}
+          onClick={signOut}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          Sign out
+        </Button>
+      </header>
+      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center px-6 py-14 sm:px-10">
+        <h1 className="font-medium text-2xl text-foreground tracking-tight">
+          Welcome back
+        </h1>
+        <p className="mt-2 text-muted-foreground text-sm">
+          Signed in as {session.user.email}. Your modules will appear here.
+        </p>
+      </main>
+    </div>
   )
 }
