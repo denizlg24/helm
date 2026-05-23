@@ -1,13 +1,12 @@
 {
   "name": "api",
   "version": "0.0.1",
-  "type": "module",
   "private": true,
   "scripts": {
     "build": "nest build",
     "start": "bun --env-file=../../.env src/main.ts",
     "dev": "bun --watch --env-file=../../.env src/main.ts",
-    "start:prod": "bun dist/main.js",
+    "start:prod": "node dist/main.js",
     "lint": "biome lint .",
     "format": "biome format --write .",
     "typecheck": "tsc --noEmit"

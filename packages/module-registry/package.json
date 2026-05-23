@@ -2,7 +2,6 @@
   "name": "@workspace/module-registry",
   "version": "0.0.1",
   "private": true,
-  "type": "module",
   "main": "./dist/index.js",
   "types": "./src/index.ts",
   "exports": {
@@ -12,7 +11,7 @@
     }
   },
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir ./dist --target node --format esm --packages external",
+    "build": "bun build ./src/index.ts --outdir ./dist --target node --format cjs --packages external",
     "typecheck": "tsc --noEmit",
     "lint": "biome lint .",
     "format": "biome format --write ."
