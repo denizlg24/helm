@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@workspace/api-client": "workspace:*",
+    "@workspace/auth": "workspace:*",
     "@workspace/types": "workspace:*",
     "@workspace/ui": "workspace:*",
     "better-auth": "^1.6.11",

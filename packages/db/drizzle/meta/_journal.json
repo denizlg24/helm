@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1779486870518,
+      "tag": "0000_yummy_psylocke",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779487328500,
+      "tag": "0001_regular_captain_britain",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779532800000,
+      "tag": "0002_security_review_fixes",
+      "breakpoints": true
+    }
+  ]
+}

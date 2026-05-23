@@ -9,6 +9,10 @@
     "format": "turbo format",
     "check": "biome check --write .",
     "typecheck": "turbo typecheck",
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "infra:reset": "docker compose down -v",
+    "infra:logs": "docker compose logs -f",
     "prepare": "husky"
   },
   "devDependencies": {

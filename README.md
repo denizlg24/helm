@@ -55,7 +55,7 @@ bun --filter desktop dev
 bun --filter api dev
 ```
 
-Default dev ports: marketing `3001`, console `3002`, web `3000`, api `3000` (override), desktop dev server `1420`.
+Default dev ports: web `3000`, marketing `3001`, console `3002`, api `3003`, desktop dev server `1420`.
 
 ## Adding shadcn components
 

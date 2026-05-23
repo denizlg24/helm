@@ -1,0 +1,34 @@
+{
+  "name": "@workspace/auth",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/server.ts",
+  "types": "./src/server.ts",
+  "exports": {
+    "./server": "./src/server.ts",
+    "./client": "./src/client.ts",
+    "./permissions": "./src/permissions.ts",
+    "./types": "./src/types.ts",
+    "./env": "./src/env.ts",
+    "./constants": "./src/constants.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint .",
+    "format": "biome format --write ."
+  },
+  "dependencies": {
+    "@better-auth/api-key": "^1.6.11",
+    "@better-auth/drizzle-adapter": "^1.6.11",
+    "@workspace/db": "workspace:*",
+    "@workspace/module-registry": "workspace:*",
+    "@workspace/types": "workspace:*",
+    "better-auth": "^1.6.11",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@workspace/typescript-config": "workspace:*",
+    "typescript": "^6.0.3"
+  }
+}
