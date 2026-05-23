@@ -12,7 +12,7 @@ import { OtpField } from "@workspace/ui/components/form-field"
 import { toast } from "@workspace/ui/components/sonner"
 import { Spinner } from "@workspace/ui/components/spinner"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Suspense, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { authClient } from "../../lib/auth-client"
@@ -54,15 +54,17 @@ function DeviceForm() {
     defaultValues: { code: prefilled },
   })
 
-  if (isPending) {
-    return <CenteredSpinner />
-  }
+  const nextTarget = prefilled
+    ? `/device?user_code=${encodeURIComponent(prefilled)}`
+    : "/device"
 
-  if (!session) {
-    const nextTarget = prefilled
-      ? `/device?user_code=${encodeURIComponent(prefilled)}`
-      : "/device"
-    router.replace(`/sign-in?next=${encodeURIComponent(nextTarget)}`)
+  useEffect(() => {
+    if (!isPending && !session) {
+      router.replace(`/sign-in?next=${encodeURIComponent(nextTarget)}`)
+    }
+  }, [isPending, session, nextTarget, router])
+
+  if (isPending || !session) {
     return <CenteredSpinner />
   }
 

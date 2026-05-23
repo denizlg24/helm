@@ -43,23 +43,32 @@ function SignInForm() {
   })
 
   const onSubmit = form.handleSubmit(async (values) => {
-    const result = await authClient.signIn.email(values)
-    if (result.error) {
-      toast.error(result.error.message ?? "Sign in failed")
-      return
+    try {
+      const result = await authClient.signIn.email(values)
+      if (result.error) {
+        toast.error(result.error.message ?? "Sign in failed")
+        return
+      }
+      window.location.assign(next)
+    } catch {
+      toast.error("Sign in failed")
     }
-    window.location.assign(next)
   })
 
   const continueWithGoogle = async () => {
     setSocialPending(true)
-    const result = await authClient.signIn.social({
-      provider: "google",
-      callbackURL: next,
-    })
-    if (result.error) {
+    try {
+      const result = await authClient.signIn.social({
+        provider: "google",
+        callbackURL: next,
+      })
+      if (result.error) {
+        toast.error(result.error.message ?? "Google sign-in failed")
+      }
+    } catch {
+      toast.error("Google sign-in failed")
+    } finally {
       setSocialPending(false)
-      toast.error(result.error.message ?? "Google sign-in failed")
     }
   }
 

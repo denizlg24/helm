@@ -127,16 +127,26 @@ export function App() {
     setStatus({ kind: "idle" })
     setStarting(true)
     const client = createDesktopAuthClient()
-    const { data, error } = await client.device.code({ client_id: CLIENT_ID })
-    if (error || !data) {
-      setStarting(false)
+    let activation: Activation
+    try {
+      const { data, error } = await client.device.code({ client_id: CLIENT_ID })
+      if (error || !data) {
+        const message =
+          error?.error_description ??
+          error?.error ??
+          "Failed to start activation"
+        setStatus({ kind: "error", message })
+        return
+      }
+      activation = data
+    } catch (err) {
       const message =
-        error?.error_description ?? error?.error ?? "Failed to start activation"
+        err instanceof Error ? err.message : "Failed to start activation"
       setStatus({ kind: "error", message })
       return
+    } finally {
+      setStarting(false)
     }
-    const activation: Activation = data
-    setStarting(false)
     setStatus({ kind: "activating", activation })
     const openTarget =
       activation.verification_uri_complete ?? activation.verification_uri

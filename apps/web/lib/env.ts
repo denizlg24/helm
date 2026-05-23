@@ -8,4 +8,4 @@ export const env = WebEnvSchema.parse({
   consoleUrl: process.env.NEXT_PUBLIC_HELM_CONSOLE_URL,
 })
 
-export const consoleSignUpHref = `${env.consoleUrl}/sign-up`
+export const consoleSignUpHref = new URL("/sign-up", env.consoleUrl).toString()
