@@ -7,6 +7,13 @@ import {
   ownerAc,
 } from "better-auth/plugins/organization/access"
 
+const modulePermissionEntries = Object.fromEntries(
+  moduleDefinitions.map((moduleDefinition) => [
+    moduleDefinition.id,
+    ["read", "write", "delete", "admin"],
+  ])
+) as Record<(typeof moduleDefinitions)[number]["id"], string[]>
+
 export const helmPermissionStatement = {
   ...defaultStatements,
   workspace: ["read", "update", "delete"],
@@ -14,12 +21,7 @@ export const helmPermissionStatement = {
   apiKey: ["create", "read", "update", "delete"],
   device: ["create", "read", "revoke"],
   billing: ["read", "manage"],
-  ...Object.fromEntries(
-    moduleDefinitions.map((moduleDefinition) => [
-      moduleDefinition.id,
-      ["read", "write", "delete", "admin"],
-    ])
-  ),
+  ...modulePermissionEntries,
 } as const
 
 export const helmAccessControl = createAccessControl(helmPermissionStatement)
@@ -31,12 +33,7 @@ export const owner = helmAccessControl.newRole({
   apiKey: ["create", "read", "update", "delete"],
   device: ["create", "read", "revoke"],
   billing: ["read", "manage"],
-  ...Object.fromEntries(
-    moduleDefinitions.map((moduleDefinition) => [
-      moduleDefinition.id,
-      ["read", "write", "delete", "admin"],
-    ])
-  ),
+  ...modulePermissionEntries,
 })
 
 export const admin = helmAccessControl.newRole({
@@ -61,10 +58,5 @@ export const helmApiKeyPermissionStatement = {
   module: ["read", "configure"],
   apiKey: ["read", "update"],
   device: ["read", "revoke"],
-  ...Object.fromEntries(
-    moduleDefinitions.map((moduleDefinition) => [
-      moduleDefinition.id,
-      ["read", "write", "delete", "admin"],
-    ])
-  ),
+  ...modulePermissionEntries,
 } as const

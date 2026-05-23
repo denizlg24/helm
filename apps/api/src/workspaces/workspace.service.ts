@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common"
+import { auth } from "@workspace/auth/server"
 import {
   and,
   db,
@@ -15,6 +16,10 @@ import {
 } from "@workspace/db"
 import { coreMvpModuleIds } from "@workspace/module-registry"
 import type { AuthContext } from "@workspace/types"
+// biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
+import { AuditService } from "../audit/audit.service"
+// biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
+import { EntitlementService } from "../entitlements/entitlement.service"
 
 interface ResolveAuthContextInput {
   userId: string
@@ -35,6 +40,11 @@ const normalizeRole = (role: string): AuthContext["role"] => {
 
 @Injectable()
 export class WorkspaceService {
+  constructor(
+    private readonly auditService: AuditService,
+    private readonly entitlementService: EntitlementService
+  ) {}
+
   async listForUser(userId: string) {
     return db
       .select({ workspace: workspaces, role: member.role })
@@ -65,11 +75,10 @@ export class WorkspaceService {
         )
       )
 
-    const entitlementRows = await db
-      .select()
-      .from(entitlements)
-      .where(eq(entitlements.workspaceId, selected.workspace.id))
-      .limit(1)
+    const workspaceEntitlements =
+      await this.entitlementService.getWorkspaceEntitlements(
+        selected.workspace.id
+      )
 
     return {
       userId: input.userId,
@@ -80,7 +89,7 @@ export class WorkspaceService {
       authMethod: input.authMethod,
       scopes: [],
       enabledModules: enabledModules.map((row) => row.moduleId),
-      entitlements: entitlementRows[0]?.featuresJson ?? {},
+      entitlements: workspaceEntitlements,
     }
   }
 
@@ -99,7 +108,6 @@ export class WorkspaceService {
   }
 
   async provisionFirstWorkspace(input: {
-    organizationId: string
     userId: string
     displayName: string
     slug: string
@@ -107,48 +115,75 @@ export class WorkspaceService {
   }) {
     const tenantId = crypto.randomUUID()
     const now = new Date()
-
-    await db.insert(tenants).values({
-      id: tenantId,
-      createdAt: now,
-      updatedAt: now,
+    const organization = await auth.api.createOrganization({
+      body: {
+        name: input.displayName,
+        slug: input.slug,
+        userId: input.userId,
+      },
     })
 
-    await db.insert(workspaces).values({
-      id: input.organizationId,
-      tenantId,
-      createdByUserId: input.userId,
-      displayName: input.displayName,
-      slug: input.slug,
-      theme: input.theme,
-      status: "active",
-      createdAt: now,
-      updatedAt: now,
-    })
-
-    await db.insert(moduleConfigs).values(
-      coreMvpModuleIds.map((moduleId) => ({
-        id: crypto.randomUUID(),
-        tenantId,
-        workspaceId: input.organizationId,
-        moduleId,
-        enabled: true,
-        settingsJson: {},
+    await db.transaction(async (tx) => {
+      await tx.insert(tenants).values({
+        id: tenantId,
         createdAt: now,
         updatedAt: now,
-      }))
-    )
+      })
 
-    await db.insert(entitlements).values({
-      id: crypto.randomUUID(),
-      tenantId,
-      workspaceId: input.organizationId,
-      plan: "starter",
-      featuresJson: { assistant: true },
-      limitsJson: {},
-      validFrom: now,
+      await tx.insert(workspaces).values({
+        id: organization.id,
+        tenantId,
+        createdByUserId: input.userId,
+        displayName: input.displayName,
+        slug: input.slug,
+        theme: input.theme,
+        status: "active",
+        createdAt: now,
+        updatedAt: now,
+      })
+
+      await tx.insert(moduleConfigs).values(
+        coreMvpModuleIds.map((moduleId) => ({
+          id: crypto.randomUUID(),
+          tenantId,
+          workspaceId: organization.id,
+          moduleId,
+          enabled: true,
+          settingsJson: {},
+          createdAt: now,
+          updatedAt: now,
+        }))
+      )
+
+      await tx.insert(entitlements).values({
+        id: crypto.randomUUID(),
+        tenantId,
+        workspaceId: organization.id,
+        plan: "starter",
+        featuresJson: { assistant: true },
+        limitsJson: {},
+        validFrom: now,
+      })
     })
 
-    return this.getWorkspace(input.organizationId)
+    await this.auditService.write(
+      {
+        userId: input.userId,
+        workspaceId: organization.id,
+        tenantId,
+        role: "owner",
+        authMethod: "session",
+        scopes: [],
+        enabledModules: [...coreMvpModuleIds],
+        entitlements: { assistant: true },
+      },
+      {
+        action: "workspace.create",
+        resourceType: "workspace",
+        resourceId: organization.id,
+      }
+    )
+
+    return this.getWorkspace(organization.id)
   }
 }

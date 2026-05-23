@@ -22,7 +22,7 @@ const headersFromRequest = (request: FastifyRequest) => {
 export class AuthContextService {
   constructor(private readonly workspaceService: WorkspaceService) {}
 
-  async build(request: FastifyRequest): Promise<AuthContext> {
+  async buildSession(request: FastifyRequest) {
     const headers = headersFromRequest(request)
     const session = await auth.api.getSession({ headers })
 
@@ -30,9 +30,18 @@ export class AuthContextService {
       throw new UnauthorizedException("Missing or invalid session")
     }
 
+    return {
+      userId: session.user.id,
+      sessionId: session.session.id,
+      activeWorkspaceId: session.session.activeOrganizationId ?? undefined,
+    }
+  }
+
+  async build(request: FastifyRequest): Promise<AuthContext> {
+    const session = await this.buildSession(request)
     const workspaceId =
       request.headers["x-helm-workspace-id"]?.toString() ??
-      session.session.activeOrganizationId ??
+      session.activeWorkspaceId ??
       undefined
 
     const authMethod = request.headers[HELM_API_KEY_HEADER]
@@ -42,8 +51,8 @@ export class AuthContextService {
         : "session"
 
     return this.workspaceService.resolveAuthContext({
-      userId: session.user.id,
-      sessionId: session.session.id,
+      userId: session.userId,
+      sessionId: session.sessionId,
       workspaceId,
       authMethod,
     })

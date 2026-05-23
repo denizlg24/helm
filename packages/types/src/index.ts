@@ -133,10 +133,14 @@ export const RevokeDeviceInputSchema = z.object({
   deviceId: z.string().min(1),
 })
 
-export const UpdateApiTokenInputSchema = z.object({
-  name: z.string().min(1).max(120).optional(),
-  scopes: z.array(ApiScopeSchema).min(1).optional(),
-})
+export const UpdateApiTokenInputSchema = z
+  .object({
+    name: z.string().min(1).max(120).optional(),
+    scopes: z.array(ApiScopeSchema).min(1).optional(),
+  })
+  .refine((input) => input.name !== undefined || input.scopes !== undefined, {
+    message: "At least one API token field must be provided",
+  })
 
 export type WorkspaceRole = z.infer<typeof WorkspaceRoleSchema>
 export type Tenant = z.infer<typeof TenantSchema>

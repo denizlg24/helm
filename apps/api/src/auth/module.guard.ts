@@ -3,6 +3,7 @@ import {
   type ExecutionContext,
   ForbiddenException,
   Injectable,
+  UnauthorizedException,
 } from "@nestjs/common"
 // biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
 import { Reflector } from "@nestjs/core"
@@ -25,7 +26,10 @@ export class ModuleGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest<Record<string, unknown>>()
     const authContext = request[AUTH_CONTEXT_KEY] as AuthContext | undefined
-    if (!authContext?.enabledModules.includes(moduleId)) {
+    if (!authContext) {
+      throw new UnauthorizedException("Authentication context required")
+    }
+    if (!authContext.enabledModules.includes(moduleId)) {
       throw new ForbiddenException({
         code: "MODULE_DISABLED",
         message: `Module ${moduleId} is disabled`,

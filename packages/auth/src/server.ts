@@ -28,14 +28,20 @@ export interface HelmAuthConfig {
 
 export const createHelmAuth = (config: HelmAuthConfig = {}) => {
   const env = parseHelmAuthServerEnv(process.env, config)
-  const trustedOrigins =
-    config.trustedOrigins ??
-    [
-      env.HELM_CONSOLE_URL,
-      env.HELM_WEB_URL,
-      env.HELM_DESKTOP_URL,
-      env.HELM_DESKTOP_CALLBACK_ORIGIN,
-    ].filter((origin): origin is string => Boolean(origin))
+  const trustedOrigins = [
+    ...new Set(
+      (
+        config.trustedOrigins ?? [
+          env.HELM_CONSOLE_URL,
+          env.HELM_WEB_URL,
+          env.HELM_DESKTOP_URL,
+          env.HELM_DESKTOP_CALLBACK_ORIGIN,
+        ]
+      )
+        .filter((origin): origin is string => Boolean(origin))
+        .map((origin) => new URL(origin).origin)
+    ),
+  ]
 
   return betterAuth({
     baseURL: env.HELM_AUTH_BASE_URL,
@@ -66,6 +72,7 @@ export const createHelmAuth = (config: HelmAuthConfig = {}) => {
       apiKey({
         configId: HELM_API_KEY_CONFIG_ID,
         references: "organization",
+        disableKeyHashing: false,
         permissions: { defaultPermissions: {} },
         rateLimit: { enabled: true, timeWindow: 60_000, maxRequests: 120 },
       }),

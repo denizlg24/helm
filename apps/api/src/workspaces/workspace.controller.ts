@@ -1,29 +1,30 @@
 import { Body, Controller, Get, Post } from "@nestjs/common"
-import { auth } from "@workspace/auth/server"
 import {
   type AuthContext,
   CreateWorkspaceInputSchema,
   SetActiveWorkspaceInputSchema,
 } from "@workspace/types"
 import {
-  AuditSensitive,
+  type AuthSessionContext,
   CurrentAuthContext,
+  CurrentAuthSession,
   RequireWorkspace,
 } from "../auth/auth.decorators"
 // biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
 import { WorkspaceService } from "./workspace.service"
 
 @Controller("api/workspaces")
-@RequireWorkspace()
 export class WorkspaceController {
   constructor(private readonly workspaceService: WorkspaceService) {}
 
   @Get()
+  @RequireWorkspace()
   async list(@CurrentAuthContext() authContext: AuthContext) {
     return this.workspaceService.listForUser(authContext.userId)
   }
 
   @Get("current")
+  @RequireWorkspace()
   async current(@CurrentAuthContext() authContext: AuthContext) {
     const workspace = await this.workspaceService.getWorkspace(
       authContext.workspaceId
@@ -37,23 +38,13 @@ export class WorkspaceController {
   }
 
   @Post()
-  @AuditSensitive("workspace.create")
   async create(
-    @CurrentAuthContext() authContext: AuthContext,
+    @CurrentAuthSession() authSession: AuthSessionContext,
     @Body() body: unknown
   ) {
     const input = CreateWorkspaceInputSchema.parse(body)
-    const organization = await auth.api.createOrganization({
-      body: {
-        name: input.displayName,
-        slug: input.slug,
-        userId: authContext.userId,
-      },
-    })
-
     return this.workspaceService.provisionFirstWorkspace({
-      organizationId: organization.id,
-      userId: authContext.userId,
+      userId: authSession.userId,
       displayName: input.displayName,
       slug: input.slug,
       theme: input.theme,
@@ -61,6 +52,7 @@ export class WorkspaceController {
   }
 
   @Post("active")
+  @RequireWorkspace()
   async setActive(
     @CurrentAuthContext() authContext: AuthContext,
     @Body() body: unknown

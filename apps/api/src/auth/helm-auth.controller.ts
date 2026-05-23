@@ -7,8 +7,6 @@ import {
   Patch,
   Post,
 } from "@nestjs/common"
-import { HELM_API_KEY_CONFIG_ID } from "@workspace/auth/constants"
-import { auth } from "@workspace/auth/server"
 import {
   type AuthContext,
   CreateApiTokenInputSchema,
@@ -16,16 +14,25 @@ import {
   UpdateApiTokenInputSchema,
 } from "@workspace/types"
 import { z } from "zod"
+// biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
+import { ApiTokenService } from "./api-token.service"
 import {
   AuditSensitive,
   CurrentAuthContext,
   RequireScopes,
   RequireWorkspace,
 } from "./auth.decorators"
+// biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
+import { DeviceService } from "./device.service"
 
 @Controller("api")
 @RequireWorkspace()
 export class HelmAuthController {
+  constructor(
+    private readonly apiTokenService: ApiTokenService,
+    private readonly deviceService: DeviceService
+  ) {}
+
   @Get("me")
   async me(@CurrentAuthContext() authContext: AuthContext) {
     return {
@@ -38,27 +45,26 @@ export class HelmAuthController {
 
   @Get("devices")
   @RequireScopes("device:read")
-  async devices() {
-    return []
+  async devices(@CurrentAuthContext() authContext: AuthContext) {
+    return this.deviceService.list(authContext)
   }
 
   @Post("devices/revoke")
   @RequireScopes("device:revoke")
   @AuditSensitive("device.revoke")
-  async revokeDevice(@Body() body: { deviceId?: string }) {
+  async revokeDevice(
+    @CurrentAuthContext() authContext: AuthContext,
+    @Body() body: unknown
+  ) {
     const input = RevokeDeviceInputSchema.parse(body)
-    return { revoked: Boolean(input.deviceId) }
+    return this.deviceService.revoke(authContext, input.deviceId)
   }
 
   @Get("api-tokens")
   @RequireScopes("api-key:read")
+  @AuditSensitive("api-key.list")
   async apiTokens(@CurrentAuthContext() authContext: AuthContext) {
-    return auth.api.listApiKeys({
-      query: {
-        configId: HELM_API_KEY_CONFIG_ID,
-        organizationId: authContext.workspaceId,
-      },
-    })
+    return this.apiTokenService.list(authContext)
   }
 
   @Post("api-tokens")
@@ -69,28 +75,7 @@ export class HelmAuthController {
     @Body() body: unknown
   ) {
     const input = CreateApiTokenInputSchema.parse(body)
-    const permissions = input.scopes.reduce<Record<string, string[]>>(
-      (result, scope) => {
-        const [resource, action] = scope.split(":")
-        if (!resource || !action) {
-          return result
-        }
-        result[resource] = [...(result[resource] ?? []), action]
-        return result
-      },
-      {}
-    )
-
-    return auth.api.createApiKey({
-      body: {
-        configId: HELM_API_KEY_CONFIG_ID,
-        name: input.name,
-        organizationId: authContext.workspaceId,
-        userId: authContext.userId,
-        expiresIn: input.expiresIn,
-        permissions,
-      },
-    })
+    return this.apiTokenService.create(authContext, input)
   }
 
   @Patch("api-tokens/:id")
@@ -102,13 +87,7 @@ export class HelmAuthController {
   ) {
     const keyId = z.string().min(1).parse(id)
     const input = UpdateApiTokenInputSchema.parse(body)
-    return auth.api.updateApiKey({
-      body: {
-        configId: HELM_API_KEY_CONFIG_ID,
-        keyId,
-        name: input.name,
-      },
-    })
+    return this.apiTokenService.update(keyId, input)
   }
 
   @Delete("api-tokens/:id")
@@ -116,11 +95,6 @@ export class HelmAuthController {
   @AuditSensitive("api-key.delete")
   async deleteApiToken(@Param("id") id: string) {
     const keyId = z.string().min(1).parse(id)
-    return auth.api.deleteApiKey({
-      body: {
-        configId: HELM_API_KEY_CONFIG_ID,
-        keyId,
-      },
-    })
+    return this.apiTokenService.delete(keyId)
   }
 }

@@ -1,7 +1,10 @@
 export interface HelmApiClientOptions {
   baseUrl: string
-  getAuthHeaders?: () => HeadersInit | Promise<HeadersInit> | undefined
-  getWorkspaceId?: () => string | Promise<string | undefined> | undefined
+  getAuthHeaders?: () =>
+    | HeadersInit
+    | undefined
+    | Promise<HeadersInit | undefined>
+  getWorkspaceId?: () => string | undefined | Promise<string | undefined>
 }
 
 export interface HelmApiRequestClient {

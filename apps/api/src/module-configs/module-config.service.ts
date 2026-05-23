@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common"
-import { db, eq, moduleConfigs } from "@workspace/db"
+import { and, db, eq, moduleConfigs } from "@workspace/db"
 
 @Injectable()
 export class ModuleConfigService {
@@ -7,7 +7,12 @@ export class ModuleConfigService {
     const rows = await db
       .select({ moduleId: moduleConfigs.moduleId })
       .from(moduleConfigs)
-      .where(eq(moduleConfigs.workspaceId, workspaceId))
+      .where(
+        and(
+          eq(moduleConfigs.workspaceId, workspaceId),
+          eq(moduleConfigs.enabled, true)
+        )
+      )
 
     return rows.map((row) => row.moduleId)
   }

@@ -1,13 +1,19 @@
 "use client"
 
-import { useRouter, useSearchParams } from "next/navigation"
-import { useState } from "react"
+import { useSearchParams } from "next/navigation"
+import { Suspense, useState } from "react"
 import { authClient } from "../../lib/auth-client"
 
-export default function Page() {
-  const router = useRouter()
+const sanitizeRedirectPath = (value: string | null) => {
+  if (!value?.startsWith("/") || value.startsWith("//")) {
+    return "/"
+  }
+  return value
+}
+
+function SignUpPage() {
   const params = useSearchParams()
-  const next = params.get("next") ?? "/"
+  const next = sanitizeRedirectPath(params.get("next"))
   const userCode = params.get("user_code")
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
@@ -38,8 +44,7 @@ export default function Page() {
             setError(result.error.message ?? "Sign up failed")
             return
           }
-          router.push(buildNext())
-          router.refresh()
+          window.location.assign(buildNext())
         }}
       >
         <input name="name" placeholder="Name" required />
@@ -62,5 +67,19 @@ export default function Page() {
       </form>
       {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
     </main>
+  )
+}
+
+export default function Page() {
+  return (
+    <Suspense
+      fallback={
+        <main style={{ fontFamily: "system-ui", padding: "2rem" }}>
+          <p>Loading...</p>
+        </main>
+      }
+    >
+      <SignUpPage />
+    </Suspense>
   )
 }

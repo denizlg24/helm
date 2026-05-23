@@ -82,6 +82,12 @@ export const createRequestClient = (
     })
 
     await throwForStatus(response)
+    if (
+      response.status === 204 ||
+      response.headers.get("content-length") === "0"
+    ) {
+      return parse(undefined)
+    }
     return parse(await response.json())
   }
 

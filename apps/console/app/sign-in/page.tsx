@@ -1,13 +1,19 @@
 "use client"
 
-import { useRouter, useSearchParams } from "next/navigation"
-import { useState } from "react"
+import { useSearchParams } from "next/navigation"
+import { Suspense, useState } from "react"
 import { authClient } from "../../lib/auth-client"
 
-export default function Page() {
-  const router = useRouter()
+const sanitizeRedirectPath = (value: string | null) => {
+  if (!value?.startsWith("/") || value.startsWith("//")) {
+    return "/"
+  }
+  return value
+}
+
+function SignInPage() {
   const params = useSearchParams()
-  const next = params.get("next") ?? "/"
+  const next = sanitizeRedirectPath(params.get("next"))
   const userCode = params.get("user_code")
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
@@ -43,8 +49,7 @@ export default function Page() {
             setError(result.error.message ?? "Sign in failed")
             return
           }
-          router.push(buildNext())
-          router.refresh()
+          window.location.assign(buildNext())
         }}
       >
         <div>
@@ -70,22 +75,50 @@ export default function Page() {
       {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
       <button
         type="button"
-        onClick={() => {
-          void authClient.signIn.social({
+        disabled={pending}
+        onClick={async () => {
+          setPending(true)
+          setError(null)
+          const result = await authClient.signIn.social({
             provider: "google",
             callbackURL: buildNext(),
           })
+          setPending(false)
+          if (result.error) {
+            console.error("Social sign-in failed", result.error)
+            setError(result.error.message ?? "Social sign-in failed")
+          }
         }}
       >
         Continue with Google
       </button>
       <p>
         <a
-          href={`/sign-up${userCode ? `?next=/device&user_code=${encodeURIComponent(userCode)}` : ""}`}
+          href={`/sign-up${
+            userCode
+              ? `?next=${encodeURIComponent(
+                  `/device?user_code=${encodeURIComponent(userCode)}`
+                )}`
+              : ""
+          }`}
         >
           Need an account? Sign up
         </a>
       </p>
     </main>
+  )
+}
+
+export default function Page() {
+  return (
+    <Suspense
+      fallback={
+        <main style={{ fontFamily: "system-ui", padding: "2rem" }}>
+          <p>Loading...</p>
+        </main>
+      }
+    >
+      <SignInPage />
+    </Suspense>
   )
 }

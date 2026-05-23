@@ -138,6 +138,7 @@ export const apiKey = pgTable(
     name: text("name"),
     start: text("start"),
     prefix: text("prefix"),
+    // Better Auth stores a non-recoverable hash here by default.
     key: text("key").notNull(),
     referenceId: text("reference_id").notNull(),
     refillInterval: integer("refill_interval"),
@@ -185,6 +186,7 @@ export const deviceCode = pgTable(
 export const jwks = pgTable("jwks", {
   id: text("id").primaryKey(),
   publicKey: text("public_key").notNull(),
+  // Better Auth JWT encrypts private keys with AES-256-GCM by default.
   privateKey: text("private_key").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
 })
@@ -318,6 +320,10 @@ export const devices = pgTable(
     index("devices_tenant_id_idx").on(table.tenantId),
     index("devices_workspace_id_idx").on(table.workspaceId),
     index("devices_user_id_idx").on(table.userId),
+    uniqueIndex("devices_workspace_client_unique").on(
+      table.workspaceId,
+      table.clientId
+    ),
   ]
 )
 

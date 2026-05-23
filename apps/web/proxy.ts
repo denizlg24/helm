@@ -6,8 +6,9 @@ const WebProxyEnvSchema = z.object({
   HELM_CONSOLE_URL: z.string().url().default("http://localhost:3002"),
 })
 
+const env = WebProxyEnvSchema.parse(process.env)
+
 export function proxy(request: NextRequest) {
-  const env = WebProxyEnvSchema.parse(process.env)
   const sessionCookie = getSessionCookie(request)
   if (!sessionCookie) {
     const signInUrl = new URL("/sign-in", env.HELM_CONSOLE_URL)

@@ -15,6 +15,13 @@
       "when": 1779487328500,
       "tag": "0001_regular_captain_britain",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779532800000,
+      "tag": "0002_security_review_fixes",
+      "breakpoints": true
     }
   ]
 }

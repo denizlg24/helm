@@ -76,7 +76,7 @@ packages/typescript-config Shared TS configs (base, nextjs, react-library)
 - All shared components go in `packages/ui`.
 - Web and desktop reuse the same React components where practical.
 - 10 color themes already exist in `packages/ui/src/styles/themes/`. Workspace theme is a user setting.
-- Minimalistic / Editorial design pattern SaaS inspired.
+- Minimalistic / Editorial design pattern SaaS-inspired.
 
 ---
 

@@ -1,21 +1,17 @@
 import { openUrl } from "@tauri-apps/plugin-opener"
+import { createHelmApiClient } from "@workspace/api-client"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { z } from "zod"
 import { createDesktopAuthClient } from "./lib/auth-client"
 import { keychain } from "./lib/keychain"
 
 const CLIENT_ID = "helm-desktop"
 const API_URL = import.meta.env.VITE_HELM_API_URL ?? "http://localhost:3003"
 
-const SessionUserSchema = z.object({
-  id: z.string(),
-  email: z.string().optional(),
-  name: z.string().optional(),
-})
-
-const SessionResponseSchema = z.object({ user: SessionUserSchema })
-
-type SessionUser = z.infer<typeof SessionUserSchema>
+interface SessionUser {
+  id: string
+  email?: string
+  name?: string
+}
 
 type Activation = {
   device_code: string
@@ -33,24 +29,30 @@ type Status =
   | { kind: "error"; message: string }
 
 const fetchSession = async (token: string): Promise<SessionUser | null> => {
-  const res = await fetch(`${API_URL}/api/auth/get-session`, {
-    headers: { Authorization: `Bearer ${token}` },
+  const apiClient = createHelmApiClient({
+    baseUrl: API_URL,
+    getAuthHeaders: () => ({ Authorization: `Bearer ${token}` }),
   })
-  if (!res.ok) return null
-  const parsed = SessionResponseSchema.safeParse(await res.json())
-  return parsed.success ? parsed.data.user : null
+  try {
+    const response = await apiClient.user.current()
+    return response.user
+  } catch {
+    return null
+  }
 }
 
 export function App() {
   const [status, setStatus] = useState<Status>({ kind: "idle" })
   const pollRef = useRef<number | null>(null)
   const tokenRef = useRef<string | null>(null)
+  const pollingRef = useRef(false)
 
   const stopPolling = useCallback(() => {
     if (pollRef.current !== null) {
-      window.clearInterval(pollRef.current)
+      window.clearTimeout(pollRef.current)
       pollRef.current = null
     }
+    pollingRef.current = false
   }, [])
 
   useEffect(() => {
@@ -89,10 +91,14 @@ export function App() {
       // user can click link manually
     }
 
-    const intervalMs = Math.max(activation.interval, 1) * 1000
+    let intervalMs = Math.max(activation.interval, 1) * 1000
     const deadline = Date.now() + activation.expires_in * 1000
 
-    pollRef.current = window.setInterval(async () => {
+    const poll = async () => {
+      if (pollingRef.current) {
+        return
+      }
+      pollingRef.current = true
       if (Date.now() > deadline) {
         stopPolling()
         setStatus({ kind: "error", message: "Activation code expired" })
@@ -105,7 +111,14 @@ export function App() {
       })
       if (result.error) {
         const code = result.error.error
-        if (code === "authorization_pending" || code === "slow_down") return
+        if (code === "slow_down") {
+          intervalMs += 5000
+        }
+        if (code === "authorization_pending" || code === "slow_down") {
+          pollingRef.current = false
+          pollRef.current = window.setTimeout(() => void poll(), intervalMs)
+          return
+        }
         stopPolling()
         setStatus({
           kind: "error",
@@ -114,7 +127,11 @@ export function App() {
         return
       }
       const token = result.data?.access_token
-      if (!token) return
+      if (!token) {
+        pollingRef.current = false
+        pollRef.current = window.setTimeout(() => void poll(), intervalMs)
+        return
+      }
       stopPolling()
       tokenRef.current = token
       await keychain.setToken(token)
@@ -127,7 +144,9 @@ export function App() {
         return
       }
       setStatus({ kind: "connected", user })
-    }, intervalMs)
+    }
+
+    pollRef.current = window.setTimeout(() => void poll(), intervalMs)
   }, [stopPolling])
 
   const disconnect = useCallback(async () => {

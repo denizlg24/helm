@@ -33,10 +33,7 @@ async function bootstrap() {
     url: `${authBasePath}/*`,
     handler: async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const url = new URL(
-          request.url,
-          `http://${request.headers.host ?? "localhost"}`
-        )
+        const url = new URL(request.url, env.HELM_AUTH_BASE_URL)
         const headers = new Headers()
         for (const [key, value] of Object.entries(request.headers)) {
           if (value === undefined) continue

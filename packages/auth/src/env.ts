@@ -31,6 +31,7 @@ export const HelmPublicClientEnvSchema = z.object({
 })
 
 export const HelmApiRuntimeEnvSchema = z.object({
+  HELM_AUTH_BASE_URL: z.string().url().default("http://localhost:3003"),
   HELM_CONSOLE_URL: z.string().url().default("http://localhost:3002"),
   HELM_WEB_URL: z.string().url().default("http://localhost:3000"),
   HELM_DESKTOP_URL: z.string().url().default("http://localhost:1420"),

@@ -1,3 +1,4 @@
+import { ApiScopeSchema } from "@workspace/types"
 import { z } from "zod"
 
 export const ModuleGroupSchema = z.enum([
@@ -18,7 +19,7 @@ export const ModuleDefinitionSchema = z.object({
     label: z.string().min(1),
     href: z.string().min(1),
   }),
-  requiredScopes: z.array(z.string()),
+  requiredScopes: z.array(ApiScopeSchema),
   entitlementRequirements: z.array(z.string()),
   assistantTools: z.array(z.string()),
   jobs: z.array(z.string()),
@@ -164,12 +165,18 @@ export const moduleDefinitions = [
   },
 ] as const satisfies readonly ModuleDefinition[]
 
-export const moduleDefinitionById = new Map(
-  moduleDefinitions.map((moduleDefinition) => [
-    moduleDefinition.id,
-    moduleDefinition,
-  ])
-)
+export const moduleDefinitionById = (() => {
+  const definitions = new Map<string, (typeof moduleDefinitions)[number]>()
+  for (const moduleDefinition of moduleDefinitions) {
+    if (definitions.has(moduleDefinition.id)) {
+      throw new Error(
+        `Duplicate module id: ${moduleDefinition.id} (${moduleDefinition.name})`
+      )
+    }
+    definitions.set(moduleDefinition.id, moduleDefinition)
+  }
+  return definitions
+})()
 
 export const coreMvpModuleIds = [
   "home",

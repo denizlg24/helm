@@ -8,6 +8,7 @@ import { z } from "zod"
 import type { HelmApiRequestClient } from "../types"
 
 const idSchema = z.string().min(1)
+const encodeId = (id: string) => encodeURIComponent(idSchema.parse(id))
 
 export const createApiTokensModule = ({
   request,
@@ -22,7 +23,7 @@ export const createApiTokensModule = ({
     ),
   update: (id: string, input: UpdateApiTokenInput) =>
     request(
-      `/api/api-tokens/${idSchema.parse(id)}`,
+      `/api/api-tokens/${encodeId(id)}`,
       {
         method: "PATCH",
         headers: { "content-type": "application/json" },
@@ -32,7 +33,7 @@ export const createApiTokensModule = ({
     ),
   delete: (id: string) =>
     request(
-      `/api/api-tokens/${idSchema.parse(id)}`,
+      `/api/api-tokens/${encodeId(id)}`,
       { method: "DELETE" },
       (value) => value
     ),

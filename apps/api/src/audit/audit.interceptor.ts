@@ -7,7 +7,7 @@ import {
 // biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
 import { Reflector } from "@nestjs/core"
 import type { AuthContext } from "@workspace/types"
-import { type Observable, tap } from "rxjs"
+import { from, type Observable, switchMap } from "rxjs"
 import { AUDIT_SENSITIVE_KEY, AUTH_CONTEXT_KEY } from "../auth/auth.constants"
 // biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
 import { AuditService } from "./audit.service"
@@ -26,23 +26,30 @@ export class AuditInterceptor implements NestInterceptor {
     )
 
     return next.handle().pipe(
-      tap(() => {
-        if (!action) {
-          return
-        }
-        const request = context
-          .switchToHttp()
-          .getRequest<Record<string, unknown>>()
-        const authContext = request[AUTH_CONTEXT_KEY] as AuthContext | undefined
-        if (!authContext) {
-          return
-        }
-        void this.auditService.write(authContext, {
-          action,
-          resourceType: "route",
-          metadataJson: { path: request.url },
-        })
-      })
+      switchMap((value) =>
+        from(
+          (async () => {
+            if (!action) {
+              return value
+            }
+            const request = context
+              .switchToHttp()
+              .getRequest<Record<string, unknown>>()
+            const authContext = request[AUTH_CONTEXT_KEY] as
+              | AuthContext
+              | undefined
+            if (!authContext) {
+              return value
+            }
+            await this.auditService.write(authContext, {
+              action,
+              resourceType: "route",
+              metadataJson: { path: request.url },
+            })
+            return value
+          })()
+        )
+      )
     )
   }
 }

@@ -3,6 +3,7 @@ import {
   type ExecutionContext,
   ForbiddenException,
   Injectable,
+  UnauthorizedException,
 } from "@nestjs/common"
 // biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
 import { Reflector } from "@nestjs/core"
@@ -31,7 +32,7 @@ export class EntitlementGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Record<string, unknown>>()
     const authContext = request[AUTH_CONTEXT_KEY] as AuthContext | undefined
     if (!authContext) {
-      return false
+      throw new UnauthorizedException("Authentication context required")
     }
 
     const allowed = await this.entitlementService.hasFeature(

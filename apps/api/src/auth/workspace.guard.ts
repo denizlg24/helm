@@ -6,7 +6,12 @@ import {
 // biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
 import { Reflector } from "@nestjs/core"
 import type { FastifyRequest } from "fastify"
-import { AUTH_CONTEXT_KEY, IS_PUBLIC_KEY } from "./auth.constants"
+import {
+  AUTH_CONTEXT_KEY,
+  AUTH_SESSION_KEY,
+  IS_PUBLIC_KEY,
+  REQUIRE_WORKSPACE_KEY,
+} from "./auth.constants"
 // biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
 import { AuthContextService } from "./auth-context.service"
 
@@ -26,11 +31,19 @@ export class WorkspaceGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ])
-    if (isPublic || request.url.startsWith("/api/auth")) {
+    if (isPublic) {
       return true
     }
 
-    request[AUTH_CONTEXT_KEY] = await this.authContextService.build(request)
+    const requireWorkspace = this.reflector.getAllAndOverride<boolean>(
+      REQUIRE_WORKSPACE_KEY,
+      [context.getHandler(), context.getClass()]
+    )
+    request[AUTH_SESSION_KEY] =
+      await this.authContextService.buildSession(request)
+    if (requireWorkspace) {
+      request[AUTH_CONTEXT_KEY] = await this.authContextService.build(request)
+    }
     return true
   }
 }

@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter, useSearchParams } from "next/navigation"
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { authClient } from "../../lib/auth-client"
 
 type Outcome =
@@ -11,7 +11,7 @@ type Outcome =
   | { kind: "denied" }
   | { kind: "error"; message: string }
 
-export default function Page() {
+function DevicePage() {
   const router = useRouter()
   const params = useSearchParams()
   const queryCode = params.get("user_code") ?? ""
@@ -21,10 +21,10 @@ export default function Page() {
 
   useEffect(() => {
     if (!isPending && !session) {
-      const codeParam = queryCode
-        ? `&user_code=${encodeURIComponent(queryCode)}`
-        : ""
-      router.replace(`/sign-in?next=/device${codeParam}`)
+      const nextTarget = queryCode
+        ? `/device?user_code=${encodeURIComponent(queryCode)}`
+        : "/device"
+      router.replace(`/sign-in?next=${encodeURIComponent(nextTarget)}`)
     }
   }, [isPending, session, queryCode, router])
 
@@ -139,5 +139,19 @@ export default function Page() {
         <p style={{ color: "crimson" }}>{outcome.message}</p>
       ) : null}
     </main>
+  )
+}
+
+export default function Page() {
+  return (
+    <Suspense
+      fallback={
+        <main style={{ fontFamily: "system-ui", padding: "2rem" }}>
+          <p>Loading...</p>
+        </main>
+      }
+    >
+      <DevicePage />
+    </Suspense>
   )
 }
