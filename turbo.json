@@ -4,32 +4,34 @@
   "remoteCache": {
     "signature": true
   },
-  "globalEnv": [
-    "DATABASE_URL",
-    "BETTER_AUTH_SECRET",
-    "HELM_AUTH_BASE_URL",
-    "HELM_API_URL",
-    "HELM_CONSOLE_URL",
-    "HELM_WEB_URL",
-    "GOOGLE_CLIENT_ID",
-    "GOOGLE_CLIENT_SECRET",
-    "NEXT_PUBLIC_HELM_API_URL",
-    "VITE_HELM_API_URL",
-    "VITE_HELM_CONSOLE_URL",
-    "HELM_COOKIE_DOMAIN",
-    "HELM_SECURE_COOKIES",
-    "HELM_DESKTOP_CALLBACK_ORIGIN",
-    "HELM_DEVICE_CLIENT_ID",
-    "REDIS_URL",
-    "TAURI_DEV_HOST",
-    "PORT"
-  ],
   "globalPassThroughEnv": ["NODE_ENV", "CI"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", ".env*", "../../.env*"],
+      "inputs": ["$TURBO_DEFAULT$"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "web#build": {
+      "dependsOn": ["^build"],
+      "env": [
+        "HELM_CONSOLE_URL",
+        "NEXT_PUBLIC_HELM_API_URL",
+        "NEXT_PUBLIC_HELM_CONSOLE_URL"
+      ],
+      "inputs": ["$TURBO_DEFAULT$"],
+      "outputs": [".next/**", "!.next/cache/**"]
+    },
+    "console#build": {
+      "dependsOn": ["^build"],
+      "env": ["NEXT_PUBLIC_HELM_API_URL"],
+      "inputs": ["$TURBO_DEFAULT$"],
+      "outputs": [".next/**", "!.next/cache/**"]
+    },
+    "desktop#build": {
+      "dependsOn": ["^build"],
+      "env": ["VITE_HELM_API_URL", "VITE_HELM_CONSOLE_URL"],
+      "inputs": ["$TURBO_DEFAULT$"],
+      "outputs": ["dist/**"]
     },
     "lint": {
       "dependsOn": ["^lint"]
@@ -42,7 +44,37 @@
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "passThroughEnv": [
+        "DATABASE_URL",
+        "MONGO_URL",
+        "REDIS_URL",
+        "SMTP_HOST",
+        "SMTP_PORT",
+        "SMTP_USER",
+        "SMTP_PASSWORD",
+        "SMTP_FROM",
+        "BETTER_AUTH_SECRET",
+        "HELM_AUTH_BASE_URL",
+        "HELM_API_URL",
+        "HELM_CONSOLE_URL",
+        "HELM_WEB_URL",
+        "HELM_DESKTOP_URL",
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET",
+        "NEXT_PUBLIC_HELM_API_URL",
+        "NEXT_PUBLIC_HELM_CONSOLE_URL",
+        "VITE_HELM_API_URL",
+        "VITE_HELM_CONSOLE_URL",
+        "PORT",
+        "HELM_COOKIE_DOMAIN",
+        "HELM_SECURE_COOKIES",
+        "HELM_DESKTOP_CALLBACK_ORIGIN",
+        "HELM_DEVICE_CLIENT_ID",
+        "TAURI_DEV_HOST",
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY"
+      ]
     }
   }
 }
