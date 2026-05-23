@@ -17,6 +17,7 @@
         "DATABASE_URL",
         "MONGO_URL",
         "REDIS_URL",
+        "REDIS_KEY_PREFIX",
         "SMTP_HOST",
         "SMTP_PORT",
         "SMTP_USER",

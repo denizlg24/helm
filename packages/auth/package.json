@@ -3,17 +3,36 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "main": "./src/server.ts",
+  "main": "./dist/server.js",
   "types": "./src/server.ts",
   "exports": {
-    "./server": "./src/server.ts",
-    "./client": "./src/client.ts",
-    "./permissions": "./src/permissions.ts",
-    "./types": "./src/types.ts",
-    "./env": "./src/env.ts",
-    "./constants": "./src/constants.ts"
+    "./server": {
+      "types": "./src/server.ts",
+      "default": "./dist/server.js"
+    },
+    "./client": {
+      "types": "./src/client.ts",
+      "default": "./dist/client.js"
+    },
+    "./permissions": {
+      "types": "./src/permissions.ts",
+      "default": "./dist/permissions.js"
+    },
+    "./types": {
+      "types": "./src/types.ts",
+      "default": "./dist/types.js"
+    },
+    "./env": {
+      "types": "./src/env.ts",
+      "default": "./dist/env.js"
+    },
+    "./constants": {
+      "types": "./src/constants.ts",
+      "default": "./dist/constants.js"
+    }
   },
   "scripts": {
+    "build": "bun build ./src/server.ts ./src/client.ts ./src/permissions.ts ./src/types.ts ./src/env.ts ./src/constants.ts --outdir ./dist --target node --format esm --packages external",
     "typecheck": "tsc --noEmit",
     "lint": "biome lint .",
     "format": "biome format --write ."
