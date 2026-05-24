@@ -250,16 +250,16 @@ export class UsageService {
     return toInt(rows[0]?.cost)
   }
 
-  async grant(
-    authContext: AuthContext,
+  private async insertGrant(
+    context: { tenantId: string; workspaceId: string },
     input: GrantUsageCreditInput
-  ): Promise<number> {
+  ): Promise<boolean> {
     const insertResult = await db
       .insert(usageCredits)
       .values({
         id: crypto.randomUUID(),
-        tenantId: authContext.tenantId,
-        workspaceId: authContext.workspaceId,
+        tenantId: context.tenantId,
+        workspaceId: context.workspaceId,
         entryType: "grant",
         source: input.source,
         sourceRef: input.sourceRef,
@@ -270,7 +270,16 @@ export class UsageService {
         target: [usageCredits.source, usageCredits.sourceRef],
       })
 
-    if (insertResult.rowCount && insertResult.rowCount > 0) {
+    return Boolean(insertResult.rowCount && insertResult.rowCount > 0)
+  }
+
+  async grant(
+    authContext: AuthContext,
+    input: GrantUsageCreditInput
+  ): Promise<number> {
+    const granted = await this.insertGrant(authContext, input)
+
+    if (granted) {
       await this.auditService.write(authContext, {
         action: "usage.credit.grant",
         resourceType: "usage_credit",
@@ -283,5 +292,30 @@ export class UsageService {
     }
 
     return this.getCreditBalanceUsdCents(authContext.workspaceId)
+  }
+
+  /**
+   * Grant credits with no user actor — used by the Polar webhook for one-time
+   * token top-ups. Idempotent on `(source, sourceRef)`.
+   */
+  async grantSystem(
+    context: { tenantId: string; workspaceId: string },
+    input: GrantUsageCreditInput
+  ): Promise<number> {
+    const granted = await this.insertGrant(context, input)
+
+    if (granted) {
+      await this.auditService.writeSystem(context, {
+        action: "usage.credit.grant",
+        resourceType: "usage_credit",
+        resourceId: input.sourceRef,
+        metadataJson: {
+          amountUsdCents: input.amountUsdCents,
+          source: input.source,
+        },
+      })
+    }
+
+    return this.getCreditBalanceUsdCents(context.workspaceId)
   }
 }

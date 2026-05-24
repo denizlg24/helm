@@ -17,6 +17,7 @@
     "@nestjs/common": "^11.1.23",
     "@nestjs/core": "^11.1.23",
     "@nestjs/platform-fastify": "^11.1.23",
+    "@polar-sh/sdk": "^0.47.1",
     "@workspace/auth": "workspace:*",
     "@workspace/db": "workspace:*",
     "@workspace/module-registry": "workspace:*",

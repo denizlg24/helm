@@ -1,0 +1,3 @@
+CREATE UNIQUE INDEX "subscriptions_workspace_plan_unique" ON "subscriptions" USING btree ("workspace_id") WHERE "subscriptions"."product_kind" = 'plan';--> statement-breakpoint
+CREATE UNIQUE INDEX "subscriptions_workspace_module_unique" ON "subscriptions" USING btree ("workspace_id","module_id") WHERE "subscriptions"."product_kind" = 'module';--> statement-breakpoint
+ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_product_kind_module_id_ck" CHECK (("subscriptions"."product_kind" = 'module' AND "subscriptions"."module_id" IS NOT NULL) OR ("subscriptions"."product_kind" = 'plan' AND "subscriptions"."module_id" IS NULL));

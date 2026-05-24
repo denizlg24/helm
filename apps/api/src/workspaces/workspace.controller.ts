@@ -67,4 +67,17 @@ export class WorkspaceController {
 
     return { workspaceId: input.workspaceId }
   }
+
+  @Post("onboarding/complete")
+  @RequireWorkspace()
+  async completeOnboarding(@CurrentAuthContext() authContext: AuthContext) {
+    const workspace =
+      await this.workspaceService.completeOnboarding(authContext)
+    return {
+      workspace,
+      role: authContext.role,
+      enabledModules: authContext.enabledModules,
+      entitlements: authContext.entitlements,
+    }
+  }
 }

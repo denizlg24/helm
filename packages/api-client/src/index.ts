@@ -2,7 +2,12 @@ import {
   type ApiTokensModule,
   createApiTokensModule,
 } from "./modules/api-tokens"
+import { type BillingModule, createBillingModule } from "./modules/billing"
 import { createDevicesModule, type DevicesModule } from "./modules/devices"
+import {
+  createOnboardingModule,
+  type OnboardingModule,
+} from "./modules/onboarding"
 import { createUserModule, type UserModule } from "./modules/user"
 import {
   createWorkspaceModule,
@@ -19,6 +24,8 @@ export interface HelmApiClient {
   workspace: WorkspaceModule
   devices: DevicesModule
   apiTokens: ApiTokensModule
+  billing: BillingModule
+  onboarding: OnboardingModule
 }
 
 export const createHelmApiClient = (
@@ -31,5 +38,7 @@ export const createHelmApiClient = (
     workspace: createWorkspaceModule(requestClient),
     devices: createDevicesModule(requestClient),
     apiTokens: createApiTokensModule(requestClient),
+    billing: createBillingModule(requestClient),
+    onboarding: createOnboardingModule(requestClient),
   }
 }

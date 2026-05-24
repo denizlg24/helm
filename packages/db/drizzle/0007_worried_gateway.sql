@@ -1,0 +1,1 @@
+ALTER TABLE "subscriptions" ADD COLUMN "polar_created_at" timestamp with time zone;

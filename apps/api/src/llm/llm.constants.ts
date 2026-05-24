@@ -62,6 +62,15 @@ export interface NormalizedUsage {
   costUsdCents: number
 }
 
+// Adaptive thinking and the output `effort` parameter are Opus-4.x features.
+// Non-Opus Anthropic models (Sonnet, Haiku) reject both with a 400, so callers
+// must omit them. Gate on the opus family to stay forward-compatible.
+export const supportsAdaptiveThinking = (model: string): boolean =>
+  model.startsWith("claude-opus-")
+
+export const supportsOutputEffort = (model: string): boolean =>
+  model.startsWith("claude-opus-")
+
 export const inferProvider = (model: string): LlmProvider => {
   if (model.startsWith("claude-")) {
     return "anthropic"

@@ -54,7 +54,7 @@ export default function Page() {
         ...values,
         theme: values.theme ?? "sky",
       })
-      router.push("/")
+      router.push("/onboarding")
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Workspace creation failed"

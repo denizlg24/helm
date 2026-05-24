@@ -26,4 +26,26 @@ export class AuditService {
       metadataJson: input.metadataJson ?? {},
     })
   }
+
+  async writeSystem(
+    context: { tenantId: string; workspaceId: string },
+    input: {
+      action: string
+      resourceType: string
+      resourceId?: string
+      metadataJson?: Record<string, unknown>
+    }
+  ) {
+    await db.insert(auditLog).values({
+      id: crypto.randomUUID(),
+      tenantId: context.tenantId,
+      workspaceId: context.workspaceId,
+      actorUserId: null,
+      actorType: "system",
+      action: input.action,
+      resourceType: input.resourceType,
+      resourceId: input.resourceId,
+      metadataJson: input.metadataJson ?? {},
+    })
+  }
 }

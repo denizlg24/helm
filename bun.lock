@@ -23,6 +23,7 @@
         "@nestjs/common": "^11.1.23",
         "@nestjs/core": "^11.1.23",
         "@nestjs/platform-fastify": "^11.1.23",
+        "@polar-sh/sdk": "^0.47.1",
         "@workspace/auth": "workspace:*",
         "@workspace/db": "workspace:*",
         "@workspace/module-registry": "workspace:*",
@@ -55,9 +56,11 @@
         "@hookform/resolvers": "^5.0.1",
         "@workspace/api-client": "workspace:*",
         "@workspace/auth": "workspace:*",
+        "@workspace/module-registry": "workspace:*",
         "@workspace/types": "workspace:*",
         "@workspace/ui": "workspace:*",
         "better-auth": "^1.6.11",
+        "lucide-react": "^1.16.0",
         "next": "^16.2.6",
         "next-themes": "^0.4.6",
         "react": "^19.2.6",
@@ -683,6 +686,8 @@
     "@oxc-project/types": ["@oxc-project/types@0.132.0", "", {}, "sha512-FESMOxil5Se014ui/Eq8fT5uHJo6nIRwH0PfJrZJXs6Gek3ZVFOrpUv3YIZT20m+extU98Hg1Ym72U58rlsxUQ=="],
 
     "@pinojs/redact": ["@pinojs/redact@0.4.0", "", {}, "sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg=="],
+
+    "@polar-sh/sdk": ["@polar-sh/sdk@0.47.1", "", { "dependencies": { "standardwebhooks": "^1.0.0", "zod": "^3.25.65 || ^4.0.0" } }, "sha512-fkz7wPLbqfuDmY9LxuXpE2uP2TAV6J0q/YN5hJ4UBxpjbkB0hKM6c4R35N89t83dfzMlG6EOlqOn+Rd1T6XrJQ=="],
 
     "@radix-ui/number": ["@radix-ui/number@1.1.1", "", {}, "sha512-MkKCwxlXTgz6CFoJx3pCwn07GKp36+aZyu/u2Ln2VrA5DcdyCZkASEDBTd8x5whTQQL5CiYf4prXKLcgQdv29g=="],
 

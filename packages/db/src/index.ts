@@ -23,6 +23,7 @@ export {
   desc,
   eq,
   gte,
+  inArray,
   isNull,
   lt,
   or,
