@@ -19,10 +19,10 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome lint .",
     "format": "biome format --write .",
-    "db:generate": "bun --env-file=../../.env x drizzle-kit generate",
-    "db:migrate": "bun --env-file=../../.env x drizzle-kit migrate",
-    "db:push": "bun --env-file=../../.env x drizzle-kit push",
-    "db:studio": "bun --env-file=../../.env x drizzle-kit studio"
+    "db:generate": "bun x drizzle-kit generate",
+    "db:migrate": "bun x drizzle-kit migrate",
+    "db:push": "bun x drizzle-kit push",
+    "db:studio": "bun x drizzle-kit studio"
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "^1.6.11",

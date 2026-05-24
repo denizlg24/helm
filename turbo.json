@@ -4,7 +4,34 @@
   "remoteCache": {
     "signature": true
   },
-  "globalPassThroughEnv": ["NODE_ENV", "CI"],
+  "globalPassThroughEnv": [
+    "NODE_ENV",
+    "CI",
+    "DATABASE_URL",
+    "MONGO_URL",
+    "REDIS_URL",
+    "REDIS_KEY_PREFIX",
+    "SMTP_HOST",
+    "SMTP_PORT",
+    "SMTP_USER",
+    "SMTP_PASSWORD",
+    "SMTP_FROM",
+    "BETTER_AUTH_SECRET",
+    "HELM_AUTH_BASE_URL",
+    "HELM_API_URL",
+    "HELM_CONSOLE_URL",
+    "HELM_WEB_URL",
+    "HELM_DESKTOP_URL",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "PORT",
+    "HELM_COOKIE_DOMAIN",
+    "HELM_SECURE_COOKIES",
+    "HELM_DESKTOP_CALLBACK_ORIGIN",
+    "HELM_DEVICE_CLIENT_ID",
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

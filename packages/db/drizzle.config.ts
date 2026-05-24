@@ -1,10 +1,13 @@
+import { existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { Config } from "drizzle-kit"
 import { z } from "zod"
 
 const envPath = resolve(dirname(fileURLToPath(import.meta.url)), "../../.env")
-process.loadEnvFile(envPath)
+if (existsSync(envPath)) {
+  process.loadEnvFile(envPath)
+}
 
 const DrizzleEnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
