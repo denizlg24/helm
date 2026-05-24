@@ -11,13 +11,15 @@ import {
   eq,
   member,
   moduleConfigs,
+  onboardingSelections,
   tenants,
   workspaces,
 } from "@workspace/db"
-import { coreMvpModuleIds } from "@workspace/module-registry"
+import { defaultEnabledModuleIds } from "@workspace/module-registry"
 import type { AuthContext } from "@workspace/types"
 // biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
 import { AuditService } from "../audit/audit.service"
+import { PLAN_DEFINITIONS } from "../billing/billing.catalog"
 // biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
 import { EntitlementService } from "../entitlements/entitlement.service"
 
@@ -108,6 +110,39 @@ export class WorkspaceService {
     return workspace
   }
 
+  async completeOnboarding(authContext: AuthContext) {
+    const existing = await this.getWorkspace(authContext.workspaceId)
+    if (existing.onboardingCompletedAt) {
+      return existing
+    }
+
+    const now = new Date()
+    const rows = await db
+      .update(workspaces)
+      .set({ onboardingCompletedAt: now, updatedAt: now })
+      .where(eq(workspaces.id, authContext.workspaceId))
+      .returning()
+
+    const workspace = rows[0]
+    if (!workspace) {
+      throw new NotFoundException("Workspace not found")
+    }
+
+    // The selection only exists to restore the in-progress checkout session;
+    // once onboarding is complete it is no longer needed.
+    await db
+      .delete(onboardingSelections)
+      .where(eq(onboardingSelections.workspaceId, authContext.workspaceId))
+
+    await this.auditService.write(authContext, {
+      action: "workspace.onboarding.complete",
+      resourceType: "workspace",
+      resourceId: authContext.workspaceId,
+    })
+
+    return workspace
+  }
+
   async provisionFirstWorkspace(input: {
     userId: string
     displayName: string
@@ -144,7 +179,7 @@ export class WorkspaceService {
       })
 
       await tx.insert(moduleConfigs).values(
-        coreMvpModuleIds.map((moduleId) => ({
+        defaultEnabledModuleIds.map((moduleId) => ({
           id: crypto.randomUUID(),
           tenantId,
           workspaceId: organization.id,
@@ -161,8 +196,8 @@ export class WorkspaceService {
         tenantId,
         workspaceId: organization.id,
         plan: "starter",
-        featuresJson: { assistant: true },
-        limitsJson: {},
+        featuresJson: PLAN_DEFINITIONS.starter.features,
+        limitsJson: PLAN_DEFINITIONS.starter.limits,
         validFrom: now,
       })
     })
@@ -175,8 +210,8 @@ export class WorkspaceService {
         role: "owner",
         authMethod: "session",
         scopes: [],
-        enabledModules: [...coreMvpModuleIds],
-        entitlements: { assistant: true },
+        enabledModules: [...defaultEnabledModuleIds],
+        entitlements: PLAN_DEFINITIONS.starter.features,
       },
       {
         action: "workspace.create",

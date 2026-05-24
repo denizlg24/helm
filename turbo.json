@@ -103,6 +103,11 @@
     "dev": {
       "cache": false,
       "persistent": true,
+      "dependsOn": [
+        "@workspace/types#build",
+        "@workspace/db#build",
+        "@workspace/auth#build"
+      ],
       "passThroughEnv": [
         "DATABASE_URL",
         "MONGO_URL",

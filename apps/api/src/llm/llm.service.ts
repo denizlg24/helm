@@ -24,6 +24,8 @@ import {
   type LlmProvider,
   MAX_TOOL_ITERATIONS,
   type NormalizedUsage,
+  supportsAdaptiveThinking,
+  supportsOutputEffort,
 } from "./llm.constants"
 
 type OpenAIBaseParams = Omit<ResponseCreateParamsNonStreaming, "stream">
@@ -304,14 +306,23 @@ export class LlmService {
     model: string,
     options: LlmCallOptions
   ): Anthropic.MessageStreamParams {
-    const thinking: Anthropic.ThinkingConfigParam = options.thinking ?? {
-      type: "adaptive",
-      display: options.showThinking ? "summarized" : "omitted",
+    const adaptiveOk = supportsAdaptiveThinking(model)
+    let thinking: Anthropic.ThinkingConfigParam | undefined = options.thinking
+    if (!thinking && adaptiveOk) {
+      thinking = {
+        type: "adaptive",
+        display: options.showThinking ? "summarized" : "omitted",
+      }
+    }
+    // Drop adaptive thinking the model can't honor rather than 400.
+    if (thinking?.type === "adaptive" && !adaptiveOk) {
+      thinking = undefined
     }
 
-    const outputConfig: Anthropic.OutputConfig = {
-      effort: options.effort ?? DEFAULT_LLM_EFFORT,
-    }
+    const outputConfig: Anthropic.OutputConfig | undefined =
+      supportsOutputEffort(model)
+        ? { effort: options.effort ?? DEFAULT_LLM_EFFORT }
+        : undefined
 
     const system: string | Anthropic.TextBlockParam[] | undefined =
       options.cacheSystem && options.system
@@ -328,8 +339,8 @@ export class LlmService {
       model,
       max_tokens: options.maxTokens ?? DEFAULT_MAX_TOKENS,
       messages,
-      thinking,
-      output_config: outputConfig,
+      ...(thinking ? { thinking } : {}),
+      ...(outputConfig ? { output_config: outputConfig } : {}),
       ...(system !== undefined ? { system } : {}),
       ...(options.tools ? { tools: options.tools } : {}),
       ...(options.toolChoice ? { tool_choice: options.toolChoice } : {}),

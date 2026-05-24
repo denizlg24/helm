@@ -28,6 +28,10 @@ export const createWorkspaceModule = ({
       SetActiveWorkspaceInputSchema.parse(input),
       (value) => value
     ),
+  completeOnboarding: () =>
+    jsonRequest("/api/workspaces/onboarding/complete", {}, (value) =>
+      CurrentWorkspaceResponseSchema.parse(value)
+    ),
 })
 
 export type WorkspaceModule = ReturnType<typeof createWorkspaceModule>

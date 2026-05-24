@@ -1,12 +1,25 @@
+import { fileURLToPath } from "node:url"
 import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 
 const host = process.env.TAURI_DEV_HOST
 
+const resolveSrc = (path: string) =>
+  fileURLToPath(new URL(path, import.meta.url))
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   clearScreen: false,
+  resolve: {
+    alias: {
+      "@workspace/types": resolveSrc("../../packages/types/src/index.ts"),
+      "@workspace/module-registry": resolveSrc(
+        "../../packages/module-registry/src/index.ts"
+      ),
+      "@workspace/auth/env": resolveSrc("../../packages/auth/src/env.ts"),
+    },
+  },
   server: {
     port: 1420,
     strictPort: true,

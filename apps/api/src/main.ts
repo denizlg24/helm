@@ -5,10 +5,13 @@ import {
   FastifyAdapter,
   type NestFastifyApplication,
 } from "@nestjs/platform-fastify"
-import { HELM_AUTH_BASE_PATH } from "@workspace/auth/constants"
+import {
+  HELM_AUTH_BASE_PATH,
+  HELM_DESKTOP_PRODUCTION_ORIGINS,
+} from "@workspace/auth/constants"
 import { HelmApiRuntimeEnvSchema } from "@workspace/auth/env"
 import { auth } from "@workspace/auth/server"
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
+import type { FastifyReply, FastifyRequest } from "fastify"
 import { AppModule } from "./app.module"
 import { ZodExceptionFilter } from "./zod-exception.filter"
 
@@ -17,16 +20,23 @@ async function bootstrap() {
   const logger = new Logger("Bootstrap")
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter()
+    new FastifyAdapter(),
+    { rawBody: true }
   )
 
   app.useGlobalFilters(new ZodExceptionFilter())
   app.enableCors({
-    origin: [env.HELM_CONSOLE_URL, env.HELM_WEB_URL, env.HELM_DESKTOP_URL],
+    origin: [
+      env.HELM_CONSOLE_URL,
+      env.HELM_WEB_URL,
+      env.HELM_DESKTOP_URL,
+      ...HELM_DESKTOP_PRODUCTION_ORIGINS,
+    ],
     credentials: true,
   })
 
-  const fastify = app.getHttpAdapter().getInstance() as FastifyInstance
+  const fastify = app.getHttpAdapter().getInstance()
+
   const authBasePath = HELM_AUTH_BASE_PATH.replace(/\/$/, "")
   fastify.route({
     method: ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"],

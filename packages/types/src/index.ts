@@ -18,6 +18,7 @@ export const WorkspaceSchema = z.object({
   slug: z.string().min(1),
   theme: z.string().min(1),
   status: WorkspaceStatusSchema,
+  onboardingCompletedAt: z.coerce.date().nullable().optional(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 })
@@ -202,7 +203,7 @@ export const UsageCreditEntryTypeSchema = z.enum([
   "adjustment",
 ])
 export const UsageCreditSourceSchema = z.enum([
-  "stripe",
+  "polar",
   "manual",
   "usage",
   "system",
@@ -226,6 +227,151 @@ export const UsageSummarySchema = z.object({
   requestCount: z.number().int().nonnegative(),
   inputTokens: z.number().int().nonnegative(),
   outputTokens: z.number().int().nonnegative(),
+})
+
+// --- Billing (Polar) -------------------------------------------------------
+
+export const PlanIdSchema = z.enum(["starter", "pro", "enterprise"])
+
+export const SubscriptionStatusSchema = z.enum([
+  "active",
+  "trialing",
+  "past_due",
+  "canceled",
+  "incomplete",
+  "unpaid",
+])
+
+export const SubscriptionProductKindSchema = z.enum(["plan", "module"])
+
+export const SubscriptionSchema = z.object({
+  id: z.string().min(1),
+  tenantId: z.string().min(1),
+  workspaceId: z.string().min(1),
+  polarCustomerId: z.string().nullable().optional(),
+  polarSubscriptionId: z.string().nullable().optional(),
+  polarProductId: z.string().nullable().optional(),
+  productKind: SubscriptionProductKindSchema,
+  moduleId: z.string().nullable().optional(),
+  plan: PlanIdSchema,
+  status: SubscriptionStatusSchema,
+  currentPeriodEnd: z.coerce.date().nullable().optional(),
+  cancelAtPeriodEnd: z.boolean(),
+})
+
+export const PolarProductKindSchema = z.enum(["plan", "credits", "module"])
+
+export const CheckoutInputSchema = z
+  .object({
+    productId: z.string().min(1).optional(),
+    productIds: z.array(z.string().min(1)).min(1).max(24).optional(),
+    // Optional success-page override (defaults to the configured console URL).
+    successUrl: z.string().url().optional(),
+  })
+  .refine(
+    (input) => input.productId !== undefined || input.productIds !== undefined,
+    {
+      message: "At least one product must be provided",
+      path: ["productIds"],
+    }
+  )
+
+export const CheckoutSessionResponseSchema = z.object({
+  checkoutId: z.string().min(1),
+  url: z.string().url(),
+})
+
+export const ActiveCheckoutSessionSchema = z.object({
+  checkoutId: z.string().min(1),
+  productId: z.string().min(1),
+  url: z.string().url(),
+  expiresAt: z.coerce.date(),
+})
+
+export const CustomerPortalResponseSchema = z.object({
+  url: z.string().url(),
+})
+
+// One entry per Polar product available for purchase, resolved from product
+// metadata. Lets the app render a pricing/module page and start checkout with
+// the right productId — no product IDs hardcoded in the app.
+export const BillingCatalogEntrySchema = z.object({
+  productId: z.string().min(1),
+  name: z.string(),
+  kind: PolarProductKindSchema,
+  // Set when kind = "plan".
+  plan: PlanIdSchema.nullable().optional(),
+  // Set when kind = "module".
+  moduleId: z.string().nullable().optional(),
+  priceUsdCents: z.number().int().nonnegative().nullable(),
+  recurring: z.boolean(),
+})
+
+export const BillingCatalogResponseSchema = z.object({
+  entries: z.array(BillingCatalogEntrySchema),
+})
+
+export const OnboardingSelectionSchema = z.object({
+  plan: PlanIdSchema,
+  moduleIds: z.array(z.string().min(1)),
+})
+
+export const BillingSummaryResponseSchema = z.object({
+  plan: PlanIdSchema,
+  subscriptions: z.array(SubscriptionSchema),
+  enabledModuleIds: z.array(z.string()),
+  activeCheckoutSessions: z.array(ActiveCheckoutSessionSchema),
+  // Persisted onboarding selection (plan + paid modules the user intends to
+  // buy), if one is open. Lets the onboarding/checkout surfaces restore the
+  // session across reloads and devices. Null once onboarding completes.
+  selection: OnboardingSelectionSchema.nullable(),
+})
+
+// --- Onboarding ------------------------------------------------------------
+
+export const OnboardingRecommendationAnswerSchema = z.object({
+  questionId: z.string().min(1).max(80),
+  answer: z.string().min(1).max(1000),
+})
+
+export const OnboardingRecommendationInputSchema = z.object({
+  answers: z.array(OnboardingRecommendationAnswerSchema).min(1).max(5),
+  currentPlan: PlanIdSchema.optional(),
+  currentModuleIds: z.array(z.string().min(1)).max(32).optional(),
+})
+
+// One conversational turn of the guided onboarding interview. The client posts
+// the answers gathered so far; the server reacts to the latest answer and asks
+// the next canonical question (or signals the interview is done).
+export const OnboardingChatInputSchema = z.object({
+  answers: z.array(OnboardingRecommendationAnswerSchema).max(5),
+})
+
+export const OnboardingChatResponseSchema = z.object({
+  message: z.string().min(1).max(600),
+  // Canonical id of the question this turn is asking; null when done.
+  nextQuestionId: z.string().min(1).max(80).nullable(),
+  // Total questions in the interview, so the client can show progress.
+  totalQuestions: z.number().int().positive(),
+  done: z.boolean(),
+})
+
+export const SetOnboardingSelectionInputSchema = z.object({
+  plan: PlanIdSchema,
+  moduleIds: z.array(z.string().min(1)).max(32),
+})
+
+export const OnboardingRecommendationResponseSchema = z.object({
+  plan: PlanIdSchema,
+  moduleIds: z.array(z.string().min(1)).max(24),
+  summary: z.string().min(1).max(600),
+  reasons: z.array(
+    z.object({
+      id: z.string().min(1).max(80),
+      label: z.string().min(1).max(120),
+      reason: z.string().min(1).max(240),
+    })
+  ),
 })
 
 export type WorkspaceRole = z.infer<typeof WorkspaceRoleSchema>
@@ -257,5 +403,44 @@ export type LlmUsage = z.infer<typeof LlmUsageSchema>
 export type RecordLlmUsageInput = z.infer<typeof RecordLlmUsageInputSchema>
 export type UsageCreditEntryType = z.infer<typeof UsageCreditEntryTypeSchema>
 export type UsageCreditSource = z.infer<typeof UsageCreditSourceSchema>
+export type PlanId = z.infer<typeof PlanIdSchema>
+export type SubscriptionStatus = z.infer<typeof SubscriptionStatusSchema>
+export type SubscriptionProductKind = z.infer<
+  typeof SubscriptionProductKindSchema
+>
+export type Subscription = z.infer<typeof SubscriptionSchema>
+export type PolarProductKind = z.infer<typeof PolarProductKindSchema>
+export type BillingCatalogEntry = z.infer<typeof BillingCatalogEntrySchema>
+export type BillingCatalogResponse = z.infer<
+  typeof BillingCatalogResponseSchema
+>
+export type ActiveCheckoutSession = z.infer<typeof ActiveCheckoutSessionSchema>
+export type CheckoutInput = z.infer<typeof CheckoutInputSchema>
+export type CheckoutSessionResponse = z.infer<
+  typeof CheckoutSessionResponseSchema
+>
+export type CustomerPortalResponse = z.infer<
+  typeof CustomerPortalResponseSchema
+>
+export type BillingSummaryResponse = z.infer<
+  typeof BillingSummaryResponseSchema
+>
+export type OnboardingRecommendationAnswer = z.infer<
+  typeof OnboardingRecommendationAnswerSchema
+>
+export type OnboardingRecommendationInput = z.infer<
+  typeof OnboardingRecommendationInputSchema
+>
+export type OnboardingRecommendationResponse = z.infer<
+  typeof OnboardingRecommendationResponseSchema
+>
+export type OnboardingChatInput = z.infer<typeof OnboardingChatInputSchema>
+export type OnboardingChatResponse = z.infer<
+  typeof OnboardingChatResponseSchema
+>
+export type OnboardingSelection = z.infer<typeof OnboardingSelectionSchema>
+export type SetOnboardingSelectionInput = z.infer<
+  typeof SetOnboardingSelectionInputSchema
+>
 export type GrantUsageCreditInput = z.infer<typeof GrantUsageCreditInputSchema>
 export type UsageSummary = z.infer<typeof UsageSummarySchema>

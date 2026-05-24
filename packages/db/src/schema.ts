@@ -1,5 +1,7 @@
+import { sql } from "drizzle-orm"
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -212,6 +214,9 @@ export const workspaces = pgTable(
     slug: text("slug").notNull(),
     theme: text("theme").notNull().default("sky"),
     status: text("status").notNull().default("active"),
+    onboardingCompletedAt: timestamp("onboarding_completed_at", {
+      withTimezone: true,
+    }),
     ...timestamps,
   },
   (table) => [
@@ -286,13 +291,106 @@ export const subscriptions = pgTable(
     workspaceId: text("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    stripeCustomerId: text("stripe_customer_id"),
-    stripeSubscriptionId: text("stripe_subscription_id"),
+    polarCustomerId: text("polar_customer_id"),
+    polarSubscriptionId: text("polar_subscription_id"),
+    polarProductId: text("polar_product_id"),
+    // What this subscription pays for: "plan" (base usage tier) or "module"
+    // (a single paid add-on). A workspace holds at most one plan subscription
+    // plus one subscription per enabled paid module.
+    productKind: text("product_kind").notNull(),
+    // For productKind = "module": the module id this subscription enables.
+    moduleId: text("module_id"),
+    plan: text("plan").notNull(),
     status: text("status").notNull(),
+    // The Polar subscription's own creation time. Used as the recency key for
+    // the per-workspace slot: the most-recently-created subscription owns it,
+    // so a late event for a superseded (older) subscription cannot overwrite a
+    // newer one.
+    polarCreatedAt: timestamp("polar_created_at", { withTimezone: true }),
+    currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+    cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+    ...timestamps,
   },
   (table) => [
     index("subscriptions_tenant_id_idx").on(table.tenantId),
     index("subscriptions_workspace_id_idx").on(table.workspaceId),
+    uniqueIndex("subscriptions_polar_subscription_unique").on(
+      table.polarSubscriptionId
+    ),
+    uniqueIndex("subscriptions_workspace_plan_unique")
+      .on(table.workspaceId)
+      .where(sql`${table.productKind} = 'plan'`),
+    uniqueIndex("subscriptions_workspace_module_unique")
+      .on(table.workspaceId, table.moduleId)
+      .where(sql`${table.productKind} = 'module'`),
+    check(
+      "subscriptions_product_kind_module_id_ck",
+      sql`(${table.productKind} = 'module' AND ${table.moduleId} IS NOT NULL) OR (${table.productKind} = 'plan' AND ${table.moduleId} IS NULL)`
+    ),
+  ]
+)
+
+export const polarWebhookEvents = pgTable("polar_webhook_events", {
+  // The Standard Webhooks `webhook-id` header — unique per delivery, reused on
+  // retries. Presence of a row means the delivery was already processed.
+  webhookId: text("webhook_id").primaryKey(),
+  eventType: text("event_type").notNull(),
+  processedAt: timestamp("processed_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+})
+
+export const polarCheckoutSessions = pgTable(
+  "polar_checkout_sessions",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    polarCheckoutId: text("polar_checkout_id").notNull(),
+    polarProductId: text("polar_product_id").notNull(),
+    url: text("url").notNull(),
+    status: text("status").notNull().default("open"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index("polar_checkout_sessions_tenant_id_idx").on(table.tenantId),
+    index("polar_checkout_sessions_workspace_id_idx").on(table.workspaceId),
+    uniqueIndex("polar_checkout_sessions_polar_checkout_unique").on(
+      table.polarCheckoutId
+    ),
+    uniqueIndex("polar_checkout_sessions_workspace_product_unique").on(
+      table.workspaceId,
+      table.polarProductId
+    ),
+  ]
+)
+
+// One open selection per workspace during onboarding: the plan + paid modules
+// the user intends to buy. Idempotent upsert on workspaceId so re-clicking
+// "continue to checkout" updates the same row. Deleted when onboarding
+// completes.
+export const onboardingSelections = pgTable(
+  "onboarding_selections",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    plan: text("plan").notNull(),
+    moduleIds: jsonb("module_ids").$type<string[]>().notNull().default([]),
+    ...timestamps,
+  },
+  (table) => [
+    index("onboarding_selections_tenant_id_idx").on(table.tenantId),
+    uniqueIndex("onboarding_selections_workspace_unique").on(table.workspaceId),
   ]
 )
 

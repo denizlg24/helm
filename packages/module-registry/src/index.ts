@@ -30,7 +30,13 @@ export type ModuleDefinition = z.infer<typeof ModuleDefinitionSchema>
 
 const emptySettingsSchema = z.object({})
 
+// Plans no longer gate modules — access is controlled purely by whether the
+// module is enabled in `module_configs` (ModuleGuard). `entitlementRequirements`
+// is informational (used for nav hints / docs), not enforced. Paid modules are
+// gated by holding an active Polar subscription for that module's product, which
+// is what flips `module_configs.enabled`.
 export const moduleDefinitions = [
+  // --- Core (always on, free) ---------------------------------------------
   {
     id: "home",
     name: "Home dashboard",
@@ -59,8 +65,19 @@ export const moduleDefinitions = [
     group: "core",
     nav: { label: "Assistant", href: "/assistant" },
     requiredScopes: ["assistant:read", "assistant:write"],
-    entitlementRequirements: ["assistant"],
+    entitlementRequirements: [],
     assistantTools: ["assistant.chat"],
+    jobs: [],
+    settingsSchema: emptySettingsSchema,
+  },
+  {
+    id: "llm-usage",
+    name: "LLM usage",
+    group: "core",
+    nav: { label: "LLM usage", href: "/settings/usage" },
+    requiredScopes: ["usage:read"],
+    entitlementRequirements: [],
+    assistantTools: [],
     jobs: [],
     settingsSchema: emptySettingsSchema,
   },
@@ -86,6 +103,7 @@ export const moduleDefinitions = [
     jobs: [],
     settingsSchema: emptySettingsSchema,
   },
+  // --- Knowledge ----------------------------------------------------------
   {
     id: "notes",
     name: "Notes",
@@ -97,6 +115,29 @@ export const moduleDefinitions = [
     jobs: [],
     settingsSchema: emptySettingsSchema,
   },
+  {
+    id: "whiteboard",
+    name: "Whiteboards",
+    group: "knowledge",
+    nav: { label: "Whiteboards", href: "/whiteboard" },
+    requiredScopes: ["whiteboard:read", "whiteboard:write"],
+    entitlementRequirements: [],
+    assistantTools: [],
+    jobs: [],
+    settingsSchema: emptySettingsSchema,
+  },
+  {
+    id: "spreadsheets",
+    name: "Spreadsheets",
+    group: "knowledge",
+    nav: { label: "Spreadsheets", href: "/spreadsheets" },
+    requiredScopes: ["spreadsheets:read", "spreadsheets:write"],
+    entitlementRequirements: [],
+    assistantTools: [],
+    jobs: [],
+    settingsSchema: emptySettingsSchema,
+  },
+  // --- Work ---------------------------------------------------------------
   {
     id: "kanban",
     name: "Kanban",
@@ -120,6 +161,28 @@ export const moduleDefinitions = [
     settingsSchema: emptySettingsSchema,
   },
   {
+    id: "timetable",
+    name: "Timetable",
+    group: "work",
+    nav: { label: "Timetable", href: "/timetable" },
+    requiredScopes: ["timetable:read", "timetable:write"],
+    entitlementRequirements: [],
+    assistantTools: [],
+    jobs: [],
+    settingsSchema: emptySettingsSchema,
+  },
+  {
+    id: "journal",
+    name: "Journal",
+    group: "work",
+    nav: { label: "Journal", href: "/journal" },
+    requiredScopes: ["journal:read", "journal:write"],
+    entitlementRequirements: [],
+    assistantTools: [],
+    jobs: [],
+    settingsSchema: emptySettingsSchema,
+  },
+  {
     id: "pomodoro",
     name: "Pomodoro",
     group: "work",
@@ -130,6 +193,7 @@ export const moduleDefinitions = [
     jobs: [],
     settingsSchema: emptySettingsSchema,
   },
+  // --- Relationships ------------------------------------------------------
   {
     id: "people",
     name: "People",
@@ -141,26 +205,106 @@ export const moduleDefinitions = [
     jobs: [],
     settingsSchema: emptySettingsSchema,
   },
+  // --- Communications -----------------------------------------------------
   {
     id: "imap-inbox",
     name: "IMAP inbox",
     group: "communications",
     nav: { label: "Inbox", href: "/inbox" },
     requiredScopes: ["imap-inbox:read", "imap-inbox:write"],
-    entitlementRequirements: ["email"],
+    entitlementRequirements: [],
     assistantTools: ["email.triage"],
     jobs: ["email.sync"],
     settingsSchema: emptySettingsSchema,
   },
+  {
+    id: "triage",
+    name: "Email triage",
+    group: "communications",
+    nav: { label: "Triage", href: "/triage" },
+    requiredScopes: ["triage:read", "triage:write"],
+    entitlementRequirements: [],
+    assistantTools: ["triage.run"],
+    jobs: ["triage.run"],
+    settingsSchema: emptySettingsSchema,
+  },
+  // --- Infrastructure -----------------------------------------------------
   {
     id: "resources",
     name: "Resource inventory",
     group: "infrastructure",
     nav: { label: "Resources", href: "/resources" },
     requiredScopes: ["resources:read", "resources:write"],
-    entitlementRequirements: ["infrastructure"],
+    entitlementRequirements: [],
     assistantTools: ["resources.health"],
     jobs: ["resources.healthCheck"],
+    settingsSchema: emptySettingsSchema,
+  },
+  // --- Publish (add-on) ---------------------------------------------------
+  {
+    id: "blog",
+    name: "Blog",
+    group: "publish",
+    nav: { label: "Blog", href: "/blog" },
+    requiredScopes: ["blog:read", "blog:write"],
+    entitlementRequirements: [],
+    assistantTools: [],
+    jobs: [],
+    settingsSchema: emptySettingsSchema,
+  },
+  {
+    id: "projects",
+    name: "Projects",
+    group: "publish",
+    nav: { label: "Projects", href: "/projects" },
+    requiredScopes: ["projects:read", "projects:write"],
+    entitlementRequirements: [],
+    assistantTools: [],
+    jobs: [],
+    settingsSchema: emptySettingsSchema,
+  },
+  {
+    id: "timeline",
+    name: "Timeline",
+    group: "publish",
+    nav: { label: "Timeline", href: "/timeline" },
+    requiredScopes: ["timeline:read", "timeline:write"],
+    entitlementRequirements: [],
+    assistantTools: [],
+    jobs: [],
+    settingsSchema: emptySettingsSchema,
+  },
+  {
+    id: "now",
+    name: "Now page",
+    group: "publish",
+    nav: { label: "Now", href: "/now" },
+    requiredScopes: ["now:read", "now:write"],
+    entitlementRequirements: [],
+    assistantTools: [],
+    jobs: [],
+    settingsSchema: emptySettingsSchema,
+  },
+  {
+    id: "comments",
+    name: "Comments",
+    group: "publish",
+    nav: { label: "Comments", href: "/blog/comments" },
+    requiredScopes: ["comments:read", "comments:write"],
+    entitlementRequirements: [],
+    assistantTools: [],
+    jobs: [],
+    settingsSchema: emptySettingsSchema,
+  },
+  {
+    id: "contact-form",
+    name: "Contact form",
+    group: "publish",
+    nav: { label: "Contact form", href: "/settings/contact-form" },
+    requiredScopes: ["contact-form:read", "contact-form:write"],
+    entitlementRequirements: [],
+    assistantTools: [],
+    jobs: [],
     settingsSchema: emptySettingsSchema,
   },
 ] as const satisfies readonly ModuleDefinition[]
@@ -178,10 +322,25 @@ export const moduleDefinitionById = (() => {
   return definitions
 })()
 
-export const coreMvpModuleIds = [
+// Always-on core modules — free, cannot be disabled, provisioned for every
+// workspace.
+export const coreModuleIds = [
   "home",
   "settings",
   "assistant",
+  "llm-usage",
   "api-tokens",
   "data-export",
 ] as const
+
+// Modules enabled by default at signup (no extra charge). Everything else is a
+// paid monthly add-on enabled via a Polar module subscription. Per the pricing
+// decision: core + kanban + calendar are free.
+export const defaultEnabledModuleIds = [
+  ...coreModuleIds,
+  "kanban",
+  "calendar",
+] as const
+
+// Back-compat alias
+export const coreMvpModuleIds = defaultEnabledModuleIds

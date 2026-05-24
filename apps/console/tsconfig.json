@@ -2,6 +2,9 @@
   "extends": "@workspace/typescript-config/nextjs.json",
   "compilerOptions": {
     "paths": {
+      "@workspace/module-registry": [
+        "../../packages/module-registry/src/index.ts"
+      ],
       "@/*": ["./*"],
       "@workspace/ui/*": ["../../packages/ui/src/*"]
     },

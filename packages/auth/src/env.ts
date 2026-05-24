@@ -8,6 +8,18 @@ const optionalUrl = z.preprocess(
   z.string().url().optional()
 )
 
+const optionalString = z.preprocess(
+  emptyStringToUndefined,
+  z.string().min(1).optional()
+)
+
+const booleanFromString = z
+  .preprocess(
+    (value) => (typeof value === "string" ? value === "true" : value),
+    z.boolean()
+  )
+  .default(false)
+
 export const HelmAuthServerEnvSchema = z.object({
   BETTER_AUTH_SECRET: z.string().min(1),
   HELM_AUTH_BASE_URL: z.string().url().default("http://localhost:3003"),
@@ -16,6 +28,8 @@ export const HelmAuthServerEnvSchema = z.object({
   HELM_DESKTOP_URL: z.string().url().default("http://localhost:1420"),
   HELM_DESKTOP_CALLBACK_ORIGIN: optionalUrl,
   HELM_DEVICE_CLIENT_ID: z.string().min(1).default("helm-desktop"),
+  HELM_SECURE_COOKIES: booleanFromString,
+  HELM_COOKIE_DOMAIN: optionalString,
   GOOGLE_CLIENT_ID: z.preprocess(
     emptyStringToUndefined,
     z.string().min(1).optional()

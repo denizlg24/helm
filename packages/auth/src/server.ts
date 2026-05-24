@@ -12,6 +12,7 @@ import {
 import {
   HELM_API_KEY_CONFIG_ID,
   HELM_AUTH_BASE_PATH,
+  HELM_DESKTOP_PRODUCTION_ORIGINS,
   HELM_DEVICE_CLIENT_ID,
 } from "./constants"
 import { parseHelmAuthServerEnv } from "./env"
@@ -28,19 +29,19 @@ export interface HelmAuthConfig {
 
 export const createHelmAuth = (config: HelmAuthConfig = {}) => {
   const env = parseHelmAuthServerEnv(process.env, config)
+  const configuredOrigins = (
+    config.trustedOrigins ?? [
+      env.HELM_CONSOLE_URL,
+      env.HELM_WEB_URL,
+      env.HELM_DESKTOP_URL,
+      env.HELM_DESKTOP_CALLBACK_ORIGIN,
+    ]
+  )
+    .filter((origin): origin is string => Boolean(origin))
+    .map((origin) => new URL(origin).origin)
+
   const trustedOrigins = [
-    ...new Set(
-      (
-        config.trustedOrigins ?? [
-          env.HELM_CONSOLE_URL,
-          env.HELM_WEB_URL,
-          env.HELM_DESKTOP_URL,
-          env.HELM_DESKTOP_CALLBACK_ORIGIN,
-        ]
-      )
-        .filter((origin): origin is string => Boolean(origin))
-        .map((origin) => new URL(origin).origin)
-    ),
+    ...new Set([...configuredOrigins, ...HELM_DESKTOP_PRODUCTION_ORIGINS]),
   ]
 
   return betterAuth({
@@ -48,6 +49,17 @@ export const createHelmAuth = (config: HelmAuthConfig = {}) => {
     basePath: HELM_AUTH_BASE_PATH,
     secret: env.BETTER_AUTH_SECRET,
     trustedOrigins,
+    advanced: {
+      useSecureCookies: env.HELM_SECURE_COOKIES,
+      ...(env.HELM_COOKIE_DOMAIN
+        ? {
+            crossSubDomainCookies: {
+              enabled: true,
+              domain: env.HELM_COOKIE_DOMAIN,
+            },
+          }
+        : {}),
+    },
     database: drizzleAdapter(db, {
       provider: "pg",
       schema,
