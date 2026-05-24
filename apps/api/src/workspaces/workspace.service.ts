@@ -128,11 +128,10 @@ export class WorkspaceService {
         .set({ onboardingCompletedAt: now, updatedAt: now })
         .where(eq(workspaces.id, authContext.workspaceId))
         .returning()
-
-      workspace = rows[0]
-      if (!workspace) {
+      if (!rows[0]) {
         throw new NotFoundException("Workspace not found")
       }
+      workspace = rows[0]
     }
 
     // The selection only exists to restore the in-progress checkout session;

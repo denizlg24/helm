@@ -13,6 +13,9 @@ export default defineConfig({
   clearScreen: false,
   resolve: {
     alias: {
+      "@workspace/api-client": resolveSrc(
+        "../../packages/api-client/src/index.ts"
+      ),
       "@workspace/types": resolveSrc("../../packages/types/src/index.ts"),
       "@workspace/module-registry": resolveSrc(
         "../../packages/module-registry/src/index.ts"
