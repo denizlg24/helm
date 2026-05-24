@@ -4,6 +4,7 @@ import {
   db,
   eq,
   gte,
+  member,
   polarCheckoutSessions,
   sql,
   subscriptions,
@@ -321,7 +322,7 @@ export class BillingService {
     const checkout = await this.polarService.createCheckout({
       productId: params.productId,
       workspaceId: context.workspaceId,
-      customerEmail: await this.getUserEmail(params.userId),
+      customerEmail: await this.getUserEmail(params.userId, context.workspaceId),
       successUrl: params.successUrl,
     })
 
@@ -356,11 +357,15 @@ export class BillingService {
     return { checkoutId: checkout.checkoutId, url: checkout.url }
   }
 
-  private async getUserEmail(userId: string): Promise<string | undefined> {
+  private async getUserEmail(
+    userId: string,
+    workspaceId: string
+  ): Promise<string | undefined> {
     const rows = await db
       .select({ email: userTable.email })
       .from(userTable)
-      .where(eq(userTable.id, userId))
+      .innerJoin(member, eq(member.userId, userTable.id))
+      .where(and(eq(userTable.id, userId), eq(member.organizationId, workspaceId)))
       .limit(1)
 
     return rows[0]?.email

@@ -211,13 +211,30 @@ export function OnboardingPlanModulesFlow() {
         // interview.
         if (nextSummary.selection) {
           setSelectedPlan(nextSummary.selection.plan)
-          setSelectedModuleIds(
-            new Set([...enabledPaidIds, ...nextSummary.selection.moduleIds])
-          )
+          const restoredModuleIds = new Set([
+            ...enabledPaidIds,
+            ...nextSummary.selection.moduleIds,
+          ])
+          // Normalize dependencies: triage requires imap-inbox
+          if (
+            restoredModuleIds.has(TRIAGE_MODULE_ID) &&
+            !restoredModuleIds.has(INBOX_MODULE_ID)
+          ) {
+            restoredModuleIds.add(INBOX_MODULE_ID)
+          }
+          setSelectedModuleIds(restoredModuleIds)
           setManualMode(true)
         } else {
           setSelectedPlan(nextSummary.plan)
-          setSelectedModuleIds(new Set(enabledPaidIds))
+          const initialModuleIds = new Set(enabledPaidIds)
+          // Normalize dependencies: triage requires imap-inbox
+          if (
+            initialModuleIds.has(TRIAGE_MODULE_ID) &&
+            !initialModuleIds.has(INBOX_MODULE_ID)
+          ) {
+            initialModuleIds.add(INBOX_MODULE_ID)
+          }
+          setSelectedModuleIds(initialModuleIds)
           if (checkoutReturn) {
             setManualMode(true)
           }
@@ -275,7 +292,7 @@ export function OnboardingPlanModulesFlow() {
       return
     }
     scroll.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" })
-  })
+  }, [messages])
 
   const finalizeRecommendation = useCallback(
     async (finalAnswers: OnboardingRecommendationAnswer[]) => {

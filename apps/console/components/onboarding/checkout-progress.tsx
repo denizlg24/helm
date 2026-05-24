@@ -265,10 +265,18 @@ export function OnboardingCheckoutProgress() {
     }
   }
 
-  const finishSetup = () => {
-    void apiClient.workspace.completeOnboarding().then(() => {
+  const finishSetup = async () => {
+    try {
+      await apiClient.workspace.completeOnboarding()
       window.location.href = "/"
-    })
+    } catch (error) {
+      console.error("Failed to complete onboarding:", error)
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to finish setup. Please try again."
+      )
+    }
   }
 
   if (loading) {

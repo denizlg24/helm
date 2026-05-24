@@ -131,8 +131,11 @@ export const resolveEffect = (
 
   if (kind === "credits") {
     const raw = readString(metadata, METADATA_KEYS.creditsCents)
-    const amountUsdCents = raw ? Number.parseInt(raw, 10) : Number.NaN
-    return Number.isInteger(amountUsdCents) && amountUsdCents > 0
+    if (!raw || !/^\d+$/.test(raw)) {
+      return null
+    }
+    const amountUsdCents = Number(raw)
+    return Number.isSafeInteger(amountUsdCents) && amountUsdCents > 0
       ? { kind: "credits", amountUsdCents }
       : null
   }

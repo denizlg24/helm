@@ -40,7 +40,7 @@ export class OnboardingController {
     @CurrentAuthContext() authContext: AuthContext,
     @Body() body: OnboardingChatInput
   ) {
-    await this.assertOnboardingActive(authContext.workspaceId)
+    await this.workspaceService.assertOnboardingActive(authContext.workspaceId)
     const input = OnboardingChatInputSchema.parse(body)
     return this.chatService.chat(authContext, input)
   }
@@ -52,7 +52,7 @@ export class OnboardingController {
     @CurrentAuthContext() authContext: AuthContext,
     @Body() body: OnboardingRecommendationInput
   ) {
-    await this.assertOnboardingActive(authContext.workspaceId)
+    await this.workspaceService.assertOnboardingActive(authContext.workspaceId)
     const input = OnboardingRecommendationInputSchema.parse(body)
     return this.recommendationService.recommend(authContext, input)
   }
@@ -63,18 +63,11 @@ export class OnboardingController {
     @CurrentAuthContext() authContext: AuthContext,
     @Body() body: SetOnboardingSelectionInput
   ) {
-    await this.assertOnboardingActive(authContext.workspaceId)
+    await this.workspaceService.assertOnboardingActive(authContext.workspaceId)
     const input = SetOnboardingSelectionInputSchema.parse(body)
     return this.selectionService.upsert(
       { workspaceId: authContext.workspaceId, tenantId: authContext.tenantId },
       input
     )
-  }
-
-  private async assertOnboardingActive(workspaceId: string): Promise<void> {
-    const workspace = await this.workspaceService.getWorkspace(workspaceId)
-    if (workspace.onboardingCompletedAt) {
-      throw new ForbiddenException("Onboarding is already complete")
-    }
   }
 }

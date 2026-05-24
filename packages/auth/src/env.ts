@@ -14,10 +14,14 @@ const optionalString = z.preprocess(
 )
 
 const booleanFromString = z
-  .preprocess(
-    (value) => (typeof value === "string" ? value === "true" : value),
-    z.boolean()
-  )
+  .preprocess((value) => {
+    if (typeof value === "string") {
+      if (value === "true") return true
+      if (value === "false") return false
+      return value
+    }
+    return value
+  }, z.boolean())
   .default(false)
 
 export const HelmAuthServerEnvSchema = z.object({

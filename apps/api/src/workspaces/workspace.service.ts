@@ -110,22 +110,29 @@ export class WorkspaceService {
     return workspace
   }
 
+  async assertOnboardingActive(workspaceId: string): Promise<void> {
+    const workspace = await this.getWorkspace(workspaceId)
+    if (workspace.onboardingCompletedAt) {
+      throw new ForbiddenException("Onboarding is already complete")
+    }
+  }
+
   async completeOnboarding(authContext: AuthContext) {
     const existing = await this.getWorkspace(authContext.workspaceId)
-    if (existing.onboardingCompletedAt) {
-      return existing
-    }
 
-    const now = new Date()
-    const rows = await db
-      .update(workspaces)
-      .set({ onboardingCompletedAt: now, updatedAt: now })
-      .where(eq(workspaces.id, authContext.workspaceId))
-      .returning()
+    let workspace = existing
+    if (!existing.onboardingCompletedAt) {
+      const now = new Date()
+      const rows = await db
+        .update(workspaces)
+        .set({ onboardingCompletedAt: now, updatedAt: now })
+        .where(eq(workspaces.id, authContext.workspaceId))
+        .returning()
 
-    const workspace = rows[0]
-    if (!workspace) {
-      throw new NotFoundException("Workspace not found")
+      workspace = rows[0]
+      if (!workspace) {
+        throw new NotFoundException("Workspace not found")
+      }
     }
 
     // The selection only exists to restore the in-progress checkout session;
