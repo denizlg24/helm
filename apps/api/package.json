@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build": "nest build",
+    "vercel:api:build": "cd ../.. && bun run db:migrate && turbo build --filter=api",
     "start": "bun --env-file=../../.env src/main.ts",
     "dev": "bun --watch --env-file=../../.env src/main.ts",
     "start:prod": "node dist/main.js",
