@@ -335,11 +335,12 @@ export const coreModuleIds = [
 
 // Modules enabled by default at signup (no extra charge). Everything else is a
 // paid monthly add-on enabled via a Polar module subscription. Per the pricing
-// decision: core + kanban + calendar are free.
+// decision: core + kanban + calendar + pomodoro are free.
 export const defaultEnabledModuleIds = [
   ...coreModuleIds,
   "kanban",
   "calendar",
+  "pomodoro",
 ] as const
 
 // Back-compat alias

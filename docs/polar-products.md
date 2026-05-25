@@ -31,9 +31,9 @@ downgrade/revoke, with no subscription row. Only paid plans get products.
 ## Module add-ons (recurring, one row per enabled module)
 
 Free by default (do **not** create products): `home, settings, assistant,
-llm-usage, api-tokens, data-export, kanban, calendar`.
+llm-usage, api-tokens, data-export, kanban, calendar, pomodoro`.
 
-Launching now — 10 standalone paid modules, one product each:
+Launching now — 9 standalone paid modules, one product each:
 
 | Product name | Price | `helm_kind` | `helm_modules` |
 |---|---|---|---|
@@ -42,7 +42,6 @@ Launching now — 10 standalone paid modules, one product each:
 | Helm Spreadsheets | TBD | `module` | `spreadsheets` |
 | Helm Timetable | TBD | `module` | `timetable` |
 | Helm Journal | TBD | `module` | `journal` |
-| Helm Pomodoro | TBD | `module` | `pomodoro` |
 | Helm People | TBD | `module` | `people` |
 | Helm IMAP Inbox | TBD | `module` | `imap-inbox` |
 | Helm Email Triage | TBD | `module` | `triage` |
