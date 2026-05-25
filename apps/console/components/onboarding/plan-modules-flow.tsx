@@ -143,6 +143,7 @@ interface ChatMessage {
   id: string
   role: "assistant" | "user"
   content: string
+  helper?: string | null
 }
 
 export function OnboardingPlanModulesFlow() {
@@ -285,14 +286,18 @@ export function OnboardingPlanModulesFlow() {
     () => new Set(summary?.enabledModuleIds ?? []),
     [summary]
   )
+  const messageCount = messages.length
 
   useEffect(() => {
+    if (messageCount === 0) {
+      return
+    }
     const scroll = chatScrollRef.current
     if (!scroll) {
       return
     }
     scroll.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" })
-  }, [messages])
+  }, [messageCount])
 
   const finalizeRecommendation = useCallback(
     async (finalAnswers: OnboardingRecommendationAnswer[]) => {
@@ -336,7 +341,12 @@ export function OnboardingPlanModulesFlow() {
         })
         setMessages((previous) => [
           ...previous,
-          { id: crypto.randomUUID(), role: "assistant", content: turn.message },
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: turn.message,
+            helper: turn.nextQuestionHelper,
+          },
         ])
         setNextQuestionId(turn.nextQuestionId)
         setTotalQuestions(turn.totalQuestions)
@@ -561,6 +571,9 @@ export function OnboardingPlanModulesFlow() {
                 message.role === "assistant" ? (
                   <AssistantTurn key={message.id}>
                     {message.content}
+                    {message.helper ? (
+                      <ExampleAnswers>{message.helper}</ExampleAnswers>
+                    ) : null}
                   </AssistantTurn>
                 ) : (
                   <UserTurn key={message.id}>{message.content}</UserTurn>
@@ -625,7 +638,7 @@ export function OnboardingPlanModulesFlow() {
             </h1>
             <p className="max-w-xl text-balance text-muted-foreground text-sm leading-normal">
               Choose the usage plan and the operating modules Helm should open
-              with. Core, Kanban, and Calendar are already included.
+              with. Core, Kanban, Calendar, and Pomodoro are already included.
             </p>
           </header>
 
@@ -895,6 +908,14 @@ function AssistantTurn({ children }: { children: React.ReactNode }) {
       <p className="text-muted-foreground text-xs">Helm Bot</p>
       <div className="text-foreground text-sm leading-relaxed">{children}</div>
     </div>
+  )
+}
+
+function ExampleAnswers({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mt-2 max-w-md text-muted-foreground text-xs leading-relaxed">
+      {children}
+    </p>
   )
 }
 

@@ -42,6 +42,7 @@ export class OnboardingChatService {
       return {
         message: this.closingMessage(),
         nextQuestionId: null,
+        nextQuestionHelper: null,
         totalQuestions: onboardingQuestions.length,
         done: true,
       }
@@ -75,6 +76,7 @@ export class OnboardingChatService {
       return {
         message: message || this.fallbackQuestion(nextQuestion, answeredCount),
         nextQuestionId: nextQuestion.id,
+        nextQuestionHelper: nextQuestion.helper,
         totalQuestions: onboardingQuestions.length,
         done: false,
       }
@@ -86,6 +88,7 @@ export class OnboardingChatService {
       return {
         message: this.fallbackQuestion(nextQuestion, answeredCount),
         nextQuestionId: nextQuestion.id,
+        nextQuestionHelper: nextQuestion.helper,
         totalQuestions: onboardingQuestions.length,
         done: false,
       }

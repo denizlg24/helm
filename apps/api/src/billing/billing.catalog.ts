@@ -74,7 +74,6 @@ export const MODULE_MONTHLY_PRICE_USD_CENTS: Record<string, number> = {
   spreadsheets: 299,
   timetable: 199,
   journal: 299,
-  pomodoro: 0,
   people: 299,
   "imap-inbox": 499,
   triage: 399,
