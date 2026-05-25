@@ -76,7 +76,7 @@ export class OnboardingChatService {
       return {
         message: message || this.fallbackQuestion(nextQuestion, answeredCount),
         nextQuestionId: nextQuestion.id,
-        nextQuestionHelper: nextQuestion.helper,
+        nextQuestionHelper: message ? nextQuestion.helper : undefined,
         totalQuestions: onboardingQuestions.length,
         done: false,
       }
@@ -88,7 +88,7 @@ export class OnboardingChatService {
       return {
         message: this.fallbackQuestion(nextQuestion, answeredCount),
         nextQuestionId: nextQuestion.id,
-        nextQuestionHelper: nextQuestion.helper,
+        nextQuestionHelper: undefined,
         totalQuestions: onboardingQuestions.length,
         done: false,
       }

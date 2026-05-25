@@ -638,7 +638,7 @@ export function OnboardingPlanModulesFlow() {
             </h1>
             <p className="max-w-xl text-balance text-muted-foreground text-sm leading-normal">
               Choose the usage plan and the operating modules Helm should open
-              with. Core, Kanban, Calendar, and Pomodoro are already included.
+              with. Core, Kanban, and Calendar are already included.
             </p>
           </header>
 
