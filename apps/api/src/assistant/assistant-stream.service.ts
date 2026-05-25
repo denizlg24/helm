@@ -222,7 +222,7 @@ export class AssistantStreamService {
       const final = await stream.finalMessage()
       const usage = computeAnthropicUsage(conversation.model, final.usage)
       const blocks = mapFinalToBlocks(final.content)
-      await this.repo.updateMessage(shell._id, {
+      await this.repo.updateMessage(actor.workspaceId, shell._id, {
         blocks,
         status: "complete",
         usage,
@@ -289,6 +289,7 @@ export class AssistantStreamService {
 
       if (!tool) {
         await this.persistResult(
+          actor,
           resultMessageId,
           content,
           emit,
@@ -305,9 +306,12 @@ export class AssistantStreamService {
 
       if (denied) {
         if (ownerId) {
-          await this.repo.updateMessage(ownerId, { status: "complete" })
+          await this.repo.updateMessage(actor.workspaceId, ownerId, {
+            status: "complete",
+          })
         }
         await this.persistResult(
+          actor,
           resultMessageId,
           content,
           emit,
@@ -325,9 +329,15 @@ export class AssistantStreamService {
           name: use.name,
           input: use.input,
         }
-        await this.repo.setPendingApproval(conversation._id, pending)
+        await this.repo.setPendingApproval(
+          actor.workspaceId,
+          conversation._id,
+          pending
+        )
         if (ownerId) {
-          await this.repo.updateMessage(ownerId, { status: "pending_approval" })
+          await this.repo.updateMessage(actor.workspaceId, ownerId, {
+            status: "pending_approval",
+          })
         }
         emit({
           type: "tool_approval_required",
@@ -347,9 +357,12 @@ export class AssistantStreamService {
       })
       const { output, isError } = await this.execTool(actor, tool, use.input)
       if (ownerId) {
-        await this.repo.updateMessage(ownerId, { status: "complete" })
+        await this.repo.updateMessage(actor.workspaceId, ownerId, {
+          status: "complete",
+        })
       }
       await this.persistResult(
+        actor,
         resultMessageId,
         content,
         emit,
@@ -359,11 +372,16 @@ export class AssistantStreamService {
       )
     }
 
-    await this.repo.setPendingApproval(conversation._id, null)
+    await this.repo.setPendingApproval(
+      actor.workspaceId,
+      conversation._id,
+      null
+    )
     return false
   }
 
   private async persistResult(
+    actor: AuthContext,
     resultMessageId: string,
     content: Anthropic.ContentBlockParam[],
     emit: EmitFn,
@@ -377,7 +395,7 @@ export class AssistantStreamService {
       content: output,
       ...(isError ? { isError: true } : {}),
     }
-    await this.repo.pushBlock(resultMessageId, block)
+    await this.repo.pushBlock(actor.workspaceId, resultMessageId, block)
     content.push({
       type: "tool_result",
       tool_use_id: toolUseId,

@@ -1,6 +1,12 @@
 import { createHelmApiClient } from "@workspace/api-client"
 
-const API_URL = import.meta.env.VITE_HELM_API_URL ?? "http://localhost:3003"
+const API_URL =
+  import.meta.env.VITE_HELM_API_URL ??
+  (import.meta.env.MODE === "development"
+    ? "http://localhost:3003"
+    : (() => {
+        throw new Error("VITE_HELM_API_URL is required in production builds")
+      })())
 
 // The desktop app authenticates with a device bearer token (stored in the OS
 // keychain) and sends the active workspace id on every request.

@@ -113,7 +113,7 @@ const staticComponents = {
     const { type: _type, ...linkProps } = props
 
     return (
-      <StyledLink type="anchor" className="text-foreground" {...linkProps}>
+      <StyledLink className="text-foreground" {...linkProps}>
         {children}
       </StyledLink>
     )
@@ -167,7 +167,6 @@ const staticComponents = {
     <img
       className="mx-auto my-[42px] h-auto w-full rounded-[4px]"
       loading="lazy"
-      alt=""
       {...props}
     />
   ),

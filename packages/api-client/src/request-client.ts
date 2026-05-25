@@ -152,6 +152,8 @@ export const createRequestClient = (
         const { done, value } = await reader.read()
         if (done) break
         buffer += decoder.decode(value, { stream: true })
+        // Normalize CRLF to LF
+        buffer = buffer.replace(/\r\n/g, "\n")
 
         let separator = buffer.indexOf("\n\n")
         while (separator !== -1) {

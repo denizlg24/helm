@@ -152,17 +152,24 @@ const reducer = (state: ChatState, action: Action): ChatState => {
       }
     case "streamStart":
       return { ...state, status: "streaming", error: null }
-    case "streamError":
+    case "streamError": {
+      const lastMessage = state.messages[state.messages.length - 1]
+      const shouldUpdateMessage =
+        lastMessage?.role === "assistant" &&
+        (lastMessage.status === "streaming" || lastMessage.status === "generating")
       return {
         ...state,
         status: "error",
         error: action.message,
-        messages: updateLastAssistant(state.messages, (message) => ({
-          ...message,
-          status: "error",
-          error: action.message,
-        })),
+        messages: shouldUpdateMessage
+          ? updateLastAssistant(state.messages, (message) => ({
+              ...message,
+              status: "error",
+              error: action.message,
+            }))
+          : state.messages,
       }
+    }
     case "event":
       return reduceEvent(state, action.event)
     default:
@@ -271,6 +278,10 @@ const reduceEvent = (
             isError: event.isError,
           },
         },
+        pendingApproval:
+          state.pendingApproval?.toolUseId === event.toolUseId
+            ? null
+            : state.pendingApproval,
       }
     case "usage": {
       let lastAssistantId: string | null = event.messageId ?? null
@@ -320,6 +331,7 @@ const reduceEvent = (
       return {
         ...state,
         status,
+        pendingApproval: state.pendingApproval ? state.pendingApproval : null,
         messages: updateLastAssistant(state.messages, (message) => ({
           ...message,
           status: state.pendingApproval ? "pending_approval" : "complete",

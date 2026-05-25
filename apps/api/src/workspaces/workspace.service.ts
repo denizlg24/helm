@@ -87,7 +87,13 @@ export class WorkspaceService {
     const userRows = await db
       .select({ name: userTable.name, email: userTable.email })
       .from(userTable)
-      .where(eq(userTable.id, input.userId))
+      .innerJoin(member, eq(member.userId, userTable.id))
+      .where(
+        and(
+          eq(userTable.id, input.userId),
+          eq(member.organizationId, selected.workspace.id)
+        )
+      )
       .limit(1)
     const actorUser = userRows[0]
 

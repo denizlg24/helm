@@ -5,7 +5,6 @@ import type * as React from "react"
 
 type StyledLinkProps = React.ComponentProps<"a"> & {
   href?: string
-  type?: "link" | "anchor"
   children: React.ReactNode | undefined
   className?: string
 }

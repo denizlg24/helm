@@ -30,7 +30,12 @@ export function MessageList({
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
   // Track the rendered text length so we re-scroll as tokens stream in.
-  const signature = messages.map((m) => `${m.id}:${m.blocks.length}`).join("|")
+  const signature = messages
+    .map(
+      (m) =>
+        `${m.id}:${m.blocks.map((b) => (b.type === "text" ? b.text?.length ?? 0 : 0)).join(",")}`
+    )
+    .join("|")
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" })

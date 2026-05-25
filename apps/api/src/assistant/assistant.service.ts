@@ -117,7 +117,7 @@ export class AssistantService {
     }
 
     // Apply the per-message model/toggle selection to the conversation.
-    await this.repo.updateSettings(conversation._id, {
+    await this.repo.updateSettings(actor.workspaceId, conversation._id, {
       model: input.model,
       webSearchEnabled: input.webSearch,
       toolsEnabled: input.tools,
@@ -138,7 +138,9 @@ export class AssistantService {
       ? deriveTitle(input.content)
       : conversation.title
     if (isFirstMessage) {
-      await this.repo.touchConversation(conversation._id, { title })
+      await this.repo.touchConversation(actor.workspaceId, conversation._id, {
+        title,
+      })
       conversation = { ...conversation, title }
     }
 
@@ -186,7 +188,7 @@ export class AssistantService {
       return
     }
 
-    await this.repo.setPendingApproval(conversationId, null)
+    await this.repo.setPendingApproval(actor.workspaceId, conversationId, null)
     emit({
       type: "conversation",
       conversationId: conversation._id,

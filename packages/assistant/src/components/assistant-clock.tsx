@@ -14,7 +14,7 @@ export function AssistantClock() {
   }, [])
 
   if (!now) {
-    return <div className="h-14" aria-hidden />
+    return <div className="h-14" aria-hidden="true" />
   }
 
   const time = new Intl.DateTimeFormat(undefined, {

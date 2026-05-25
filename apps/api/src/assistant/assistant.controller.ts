@@ -14,6 +14,7 @@ import {
   RenameAssistantConversationInputSchema,
   StartAssistantChatInputSchema,
 } from "@workspace/types"
+import { z } from "zod"
 import type { FastifyReply } from "fastify"
 import {
   AuditSensitive,
@@ -26,6 +27,8 @@ import { RateLimit } from "../rate-limit/rate-limit.decorators"
 import { AssistantService } from "./assistant.service"
 
 type SseEvent = Parameters<Parameters<AssistantService["start"]>[2]>[0]
+
+const ConversationIdSchema = z.string().min(1)
 
 @Controller("api/assistant")
 @RequireWorkspace()
@@ -41,7 +44,8 @@ export class AssistantController {
   @Get("conversations/:id")
   @RequireScopes("assistant:read")
   async get(@CurrentAuthContext() actor: AuthContext, @Param("id") id: string) {
-    return this.assistant.getConversation(actor, id)
+    const validatedId = ConversationIdSchema.parse(id)
+    return this.assistant.getConversation(actor, validatedId)
   }
 
   @Patch("conversations/:id")
@@ -51,8 +55,9 @@ export class AssistantController {
     @Param("id") id: string,
     @Body() body: unknown
   ) {
+    const validatedId = ConversationIdSchema.parse(id)
     const input = RenameAssistantConversationInputSchema.parse(body)
-    return this.assistant.renameConversation(actor, id, input.title)
+    return this.assistant.renameConversation(actor, validatedId, input.title)
   }
 
   @Post("conversations/:id/rename")
@@ -62,8 +67,9 @@ export class AssistantController {
     @Param("id") id: string,
     @Body() body: unknown
   ) {
+    const validatedId = ConversationIdSchema.parse(id)
     const input = RenameAssistantConversationInputSchema.parse(body)
-    return this.assistant.renameConversation(actor, id, input.title)
+    return this.assistant.renameConversation(actor, validatedId, input.title)
   }
 
   @Delete("conversations/:id")
@@ -73,7 +79,8 @@ export class AssistantController {
     @CurrentAuthContext() actor: AuthContext,
     @Param("id") id: string
   ) {
-    await this.assistant.deleteConversation(actor, id)
+    const validatedId = ConversationIdSchema.parse(id)
+    await this.assistant.deleteConversation(actor, validatedId)
     return { ok: true }
   }
 
@@ -104,10 +111,11 @@ export class AssistantController {
     @Body() body: unknown,
     @Res() reply: FastifyReply
   ) {
+    const validatedId = ConversationIdSchema.parse(id)
     const input = ApproveAssistantToolInputSchema.parse(body)
     const emit = this.openStream(reply)
     try {
-      await this.assistant.approve(actor, id, input, emit.send)
+      await this.assistant.approve(actor, validatedId, input, emit.send)
     } finally {
       emit.close()
     }

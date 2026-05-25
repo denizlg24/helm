@@ -32,9 +32,14 @@ export default function Page() {
     <DashboardHome
       user={session.user}
       onSignOut={async () => {
-        await authClient.signOut()
-        router.replace("/sign-in")
-        router.refresh()
+        try {
+          await authClient.signOut()
+          router.replace("/sign-in")
+          router.refresh()
+        } catch (err) {
+          console.error("Sign-out failed:", err)
+          // Could add toast notification here if available
+        }
       }}
     />
   )

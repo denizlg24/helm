@@ -17,15 +17,6 @@ function disableMenu() {
     },
     { capture: true }
   )
-
-  document.addEventListener(
-    "selectstart",
-    (event) => {
-      event.preventDefault()
-      return false
-    },
-    { capture: true }
-  )
 }
 
 function openExternalLinksInBrowser() {

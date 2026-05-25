@@ -212,15 +212,22 @@ export class AssistantRepository {
   }
 
   async updateMessage(
+    workspaceId: string,
     id: string,
     patch: Partial<Pick<MessageDoc, "blocks" | "status" | "error" | "usage">>
   ): Promise<void> {
-    await this.messages().updateOne({ _id: id }, { $set: patch }).exec()
+    await this.messages()
+      .updateOne({ _id: id, workspaceId }, { $set: patch })
+      .exec()
   }
 
-  async pushBlock(id: string, block: AssistantContentBlock): Promise<void> {
+  async pushBlock(
+    workspaceId: string,
+    id: string,
+    block: AssistantContentBlock
+  ): Promise<void> {
     await this.messages()
-      .updateOne({ _id: id }, { $push: { blocks: block } })
+      .updateOne({ _id: id, workspaceId }, { $push: { blocks: block } })
       .exec()
   }
 
@@ -232,31 +239,34 @@ export class AssistantRepository {
   }
 
   async setPendingApproval(
+    workspaceId: string,
     conversationId: string,
     pending: AssistantPendingApproval | null
   ): Promise<void> {
     await this.conversations()
       .updateOne(
-        { _id: conversationId },
+        { _id: conversationId, workspaceId },
         { $set: { pendingApproval: pending, updatedAt: new Date() } }
       )
       .exec()
   }
 
   async touchConversation(
+    workspaceId: string,
     conversationId: string,
     patch: { title?: string; model?: AssistantModelId }
   ): Promise<void> {
     const now = new Date()
     await this.conversations()
       .updateOne(
-        { _id: conversationId },
+        { _id: conversationId, workspaceId },
         { $set: { ...patch, lastMessageAt: now, updatedAt: now } }
       )
       .exec()
   }
 
   async updateSettings(
+    workspaceId: string,
     conversationId: string,
     settings: {
       model: AssistantModelId
@@ -266,7 +276,7 @@ export class AssistantRepository {
   ): Promise<void> {
     await this.conversations()
       .updateOne(
-        { _id: conversationId },
+        { _id: conversationId, workspaceId },
         { $set: { ...settings, updatedAt: new Date() } }
       )
       .exec()

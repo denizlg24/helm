@@ -52,6 +52,9 @@ export function DesktopDashboard({
 
   useEffect(() => {
     setApiToken(token)
+    setReady(false)
+    setApiWorkspaceId(undefined)
+    setConversations([])
     setDisplayUser(user)
     let cancelled = false
     apiClient.user

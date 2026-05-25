@@ -107,7 +107,7 @@ export function AppHeader({
 
       <div className="min-w-0">
         <p className="truncate text-[0.95rem] text-foreground tracking-normal">
-          {title.toLocaleLowerCase()}
+          {title}
         </p>
       </div>
 
