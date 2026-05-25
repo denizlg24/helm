@@ -32,6 +32,7 @@ async function bootstrap() {
       env.HELM_DESKTOP_URL,
       ...HELM_DESKTOP_PRODUCTION_ORIGINS,
     ],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
   })
 

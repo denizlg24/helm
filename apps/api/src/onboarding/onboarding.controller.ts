@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Post } from "@nestjs/common"
+import { Body, Controller, Post } from "@nestjs/common"
 import {
   type AuthContext,
   type OnboardingChatInput,

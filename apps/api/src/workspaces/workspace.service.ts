@@ -13,6 +13,7 @@ import {
   moduleConfigs,
   onboardingSelections,
   tenants,
+  user as userTable,
   workspaces,
 } from "@workspace/db"
 import { defaultEnabledModuleIds } from "@workspace/module-registry"
@@ -83,10 +84,20 @@ export class WorkspaceService {
         selected.workspace.id
       )
 
+    const userRows = await db
+      .select({ name: userTable.name, email: userTable.email })
+      .from(userTable)
+      .where(eq(userTable.id, input.userId))
+      .limit(1)
+    const actorUser = userRows[0]
+
     return {
       userId: input.userId,
+      userName: actorUser?.name,
+      userEmail: actorUser?.email,
       sessionId: input.sessionId,
       workspaceId: selected.workspace.id,
+      workspaceName: selected.workspace.displayName,
       tenantId: selected.workspace.tenantId,
       role: normalizeRole(selected.role),
       authMethod: input.authMethod,

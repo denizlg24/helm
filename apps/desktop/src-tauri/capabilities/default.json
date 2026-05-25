@@ -8,6 +8,8 @@
     {
       "identifier": "opener:allow-open-url",
       "allow": [
+        { "url": "http://**" },
+        { "url": "https://**" },
         { "url": "http://localhost:3002/**" },
         { "url": "https://localhost:3002/**" }
       ]
