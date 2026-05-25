@@ -353,7 +353,7 @@ export const OnboardingChatResponseSchema = z.object({
   nextQuestionId: z.string().min(1).max(80).nullable(),
   // Server-owned example answers for the question. Rendered separately so the
   // client does not depend on the model remembering to include them.
-  nextQuestionHelper: z.string().min(1).max(300).nullable(),
+  nextQuestionHelper: z.string().min(1).max(300).nullable().optional(),
   // Total questions in the interview, so the client can show progress.
   totalQuestions: z.number().int().positive(),
   done: z.boolean(),
