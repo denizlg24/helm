@@ -155,8 +155,7 @@ const reducer = (state: ChatState, action: Action): ChatState => {
     case "streamError": {
       const lastMessage = state.messages[state.messages.length - 1]
       const shouldUpdateMessage =
-        lastMessage?.role === "assistant" &&
-        (lastMessage.status === "streaming" || lastMessage.status === "generating")
+        lastMessage?.role === "assistant" && lastMessage.status === "streaming"
       return {
         ...state,
         status: "error",

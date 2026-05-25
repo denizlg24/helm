@@ -56,44 +56,44 @@ const hasImageChild = (node: unknown) => {
 const staticComponents = {
   p: ({ node, ...props }) => (
     <p
-      className="break-words text-[15px] text-foreground/90 leading-[24px] tracking-[-0.003em] sm:text-[16px] sm:leading-[26px] md:text-[17px] md:leading-[28px] mb-[24px]"
+      className="mb-[24px] break-words text-[15px] text-foreground/90 leading-[24px] tracking-[-0.003em] sm:text-[16px] sm:leading-[26px] md:text-[17px] md:leading-[28px]"
       {...props}
     />
   ),
 
   h1: ({ node, ...props }) => (
     <h1
-      className="font-sans text-[26px] font-bold text-foreground leading-[1.1] tracking-[-0.022em] lowercase sm:text-[32px] md:text-[38px] mt-[36px] sm:mt-[40px] md:mt-[44px] mb-[8px]"
+      className="mt-[36px] mb-[8px] font-bold font-sans text-[26px] text-foreground lowercase leading-[1.1] tracking-[-0.022em] sm:mt-[40px] sm:text-[32px] md:mt-[44px] md:text-[38px]"
       {...props}
     />
   ),
   h2: ({ node, ...props }) => (
     <h2
-      className="font-sans text-[22px] font-bold text-foreground leading-[1.15] tracking-[-0.022em] lowercase sm:text-[26px] md:text-[30px] mt-[28px] sm:mt-[32px] md:mt-[36px] mb-[8px]"
+      className="mt-[28px] mb-[8px] font-bold font-sans text-[22px] text-foreground lowercase leading-[1.15] tracking-[-0.022em] sm:mt-[32px] sm:text-[26px] md:mt-[36px] md:text-[30px]"
       {...props}
     />
   ),
   h3: ({ node, ...props }) => (
     <h3
-      className="font-sans text-[19px] font-bold text-foreground leading-[1.2] tracking-[-0.019em] lowercase sm:text-[22px] md:text-[26px] mt-[24px] sm:mt-[26px] md:mt-[28px] mb-[8px]"
+      className="mt-[24px] mb-[8px] font-bold font-sans text-[19px] text-foreground lowercase leading-[1.2] tracking-[-0.019em] sm:mt-[26px] sm:text-[22px] md:mt-[28px] md:text-[26px]"
       {...props}
     />
   ),
   h4: ({ node, ...props }) => (
     <h4
-      className="font-sans text-[17px] font-bold text-foreground leading-[1.22] tracking-[-0.015em] lowercase sm:text-[19px] md:text-[22px] mt-[18px] sm:mt-[20px] md:mt-[22px] mb-[8px]"
+      className="mt-[18px] mb-[8px] font-bold font-sans text-[17px] text-foreground lowercase leading-[1.22] tracking-[-0.015em] sm:mt-[20px] sm:text-[19px] md:mt-[22px] md:text-[22px]"
       {...props}
     />
   ),
   h5: ({ node, ...props }) => (
     <h5
-      className="font-sans text-[16px] font-semibold text-foreground leading-[1.25] tracking-[-0.012em] lowercase sm:text-[17px] md:text-[18px] mt-[16px] sm:mt-[17px] md:mt-[18px] mb-[8px]"
+      className="mt-[16px] mb-[8px] font-sans font-semibold text-[16px] text-foreground lowercase leading-[1.25] tracking-[-0.012em] sm:mt-[17px] sm:text-[17px] md:mt-[18px] md:text-[18px]"
       {...props}
     />
   ),
   h6: ({ node, ...props }) => (
     <h6
-      className="font-sans text-[15px] font-semibold text-foreground leading-[1.3] tracking-[-0.01em] lowercase sm:text-[15px] md:text-[16px] mt-[14px] sm:mt-[14px] md:mt-[16px] mb-[8px]"
+      className="mt-[14px] mb-[8px] font-sans font-semibold text-[15px] text-foreground lowercase leading-[1.3] tracking-[-0.01em] sm:mt-[14px] sm:text-[15px] md:mt-[16px] md:text-[16px]"
       {...props}
     />
   ),
@@ -128,7 +128,7 @@ const staticComponents = {
 
   ol: ({ node, ...props }) => (
     <ol
-      className="ml-[30px] list-outside list-decimal text-[15px] text-foreground/90 leading-[24px] sm:text-[16px] sm:leading-[26px] md:text-[17px] md:leading-[28px] mb-[24px]"
+      className="mb-[24px] ml-[30px] list-outside list-decimal text-[15px] text-foreground/90 leading-[24px] sm:text-[16px] sm:leading-[26px] md:text-[17px] md:leading-[28px]"
       {...props}
     />
   ),
@@ -163,10 +163,11 @@ const staticComponents = {
     </pre>
   ),
 
-  img: ({ node, ...props }) => (
+  img: ({ node, alt = "", ...props }) => (
     <img
       className="mx-auto my-[42px] h-auto w-full rounded-[4px]"
       loading="lazy"
+      alt={alt}
       {...props}
     />
   ),
@@ -236,7 +237,7 @@ export function MarkdownRenderer({
       return (
         <ul
           className={cn(
-            "ml-[30px] list-outside list-disc text-[15px] text-foreground/90 leading-[24px] sm:text-[16px] sm:leading-[26px] md:text-[17px] md:leading-[28px] mb-[24px]",
+            "mb-[24px] ml-[30px] list-outside list-disc text-[15px] text-foreground/90 leading-[24px] sm:text-[16px] sm:leading-[26px] md:text-[17px] md:leading-[28px]",
             isTaskList && "ml-0 list-none"
           )}
           {...props}
@@ -249,7 +250,7 @@ export function MarkdownRenderer({
       return (
         <li
           className={cn(
-            "pl-[5px] mb-[10px]",
+            "mb-[10px] pl-[5px]",
             isTaskItem && "flex list-none items-start gap-2 pl-0"
           )}
           {...props}

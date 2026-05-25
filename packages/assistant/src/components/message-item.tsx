@@ -41,7 +41,7 @@ export function MessageItem({
       .map((b) => (b.type === "text" ? b.text : ""))
       .join("\n")
     return (
-      <div className="flex animate-in justify-end fade-in slide-in-from-bottom-1 duration-300">
+      <div className="fade-in slide-in-from-bottom-1 flex animate-in justify-end duration-300">
         <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-muted/60 px-4 py-2.5 text-foreground/90 text-sm">
           {text}
         </div>
@@ -87,7 +87,7 @@ export function MessageItem({
   }, [])
 
   return (
-    <div className="group flex animate-in flex-col gap-1 fade-in duration-300">
+    <div className="group fade-in flex animate-in flex-col gap-1 duration-300">
       {showRaw ? (
         <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg bg-muted/50 p-4 font-mono text-foreground/80 text-sm">
           {textContent}

@@ -50,6 +50,7 @@ export function Composer({
     ASSISTANT_MODELS.find((m) => m.id === model)?.label ?? model
 
   useLayoutEffect(() => {
+    void value
     const el = textareaRef.current
     if (!el) return
     el.style.height = "0px"
@@ -68,7 +69,7 @@ export function Composer({
     <div
       className={cn(
         "flex items-center gap-1.5 border border-border bg-background px-2 py-1.5 shadow-sm focus-within:border-foreground/20",
-        multiLine ? "rounded-lg items-end" : "rounded-full",
+        multiLine ? "items-end rounded-lg" : "rounded-full",
         disabled && "opacity-60"
       )}
     >
@@ -114,10 +115,10 @@ export function Composer({
             submit()
           }
         }}
-        className="max-h-50 flex-1 resize-none self-center bg-transparent py-1.5 text-foreground text-sm leading-6 outline-none scrollbar-none placeholder:text-muted-foreground"
+        className="scrollbar-none max-h-50 flex-1 resize-none self-center bg-transparent py-1.5 text-foreground text-sm leading-6 outline-none placeholder:text-muted-foreground"
       />
 
-      <span className="hidden shrink-0 select-none text-xs text-muted-foreground tracking-wide sm:block">
+      <span className="hidden shrink-0 select-none text-muted-foreground text-xs tracking-wide sm:block">
         {modelLabel}
       </span>
 

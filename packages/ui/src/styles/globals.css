@@ -255,9 +255,12 @@
   color: #a1bc98;
 }
 
-.hljs-meta .hljs-string,
 .hljs-regexp,
 .hljs-string {
+  color: #9cc5c9;
+}
+
+.hljs-meta .hljs-string {
   color: #9cc5c9;
 }
 

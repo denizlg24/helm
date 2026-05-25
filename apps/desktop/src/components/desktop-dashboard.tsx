@@ -53,7 +53,7 @@ export function DesktopDashboard({
   useEffect(() => {
     setApiToken(token)
     setReady(false)
-    setApiWorkspaceId(undefined)
+    setApiWorkspaceId(null)
     setConversations([])
     setDisplayUser(user)
     let cancelled = false

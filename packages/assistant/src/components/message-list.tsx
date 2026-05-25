@@ -33,11 +33,12 @@ export function MessageList({
   const signature = messages
     .map(
       (m) =>
-        `${m.id}:${m.blocks.map((b) => (b.type === "text" ? b.text?.length ?? 0 : 0)).join(",")}`
+        `${m.id}:${m.blocks.map((b) => (b.type === "text" ? (b.text?.length ?? 0) : 0)).join(",")}`
     )
     .join("|")
 
   useEffect(() => {
+    void signature
     bottomRef.current?.scrollIntoView({ block: "end" })
   }, [signature])
 
