@@ -193,6 +193,34 @@ export class LlmService {
     return stream
   }
 
+  // Anthropic-only streaming with the precise SDK stream type returned, so
+  // callers driving a streaming tool loop can iterate raw events and await
+  // `finalMessage()` without union narrowing. Budget + usage are still enforced.
+  async streamAnthropic(
+    actor: AuthContext,
+    messages: Anthropic.MessageParam[],
+    options: LlmCallOptions = {}
+  ) {
+    await this.preCheckBudget(actor, options)
+    const { model } = this.resolveModel({ ...options, provider: "anthropic" })
+    const stream = this.getAnthropicClient().messages.stream(
+      this.buildAnthropicParams(messages, model, options)
+    )
+    if (options.record !== false) {
+      stream.on("finalMessage", (message) => {
+        void this.recordAnthropicUsage(actor, model, message, options).catch(
+          (error: unknown) => {
+            this.logger.error(
+              `Failed to record streamed Anthropic usage for workspace ${actor.workspaceId}`,
+              error instanceof Error ? error.stack : undefined
+            )
+          }
+        )
+      })
+    }
+    return stream
+  }
+
   async runTools(
     actor: AuthContext,
     messages: Anthropic.MessageParam[],

@@ -74,8 +74,11 @@ export const AuditLogSchema = z.object({
 
 export const AuthContextSchema = z.object({
   userId: z.string().min(1),
+  userName: z.string().min(1).optional(),
+  userEmail: z.string().email().optional(),
   sessionId: z.string().min(1).optional(),
   workspaceId: z.string().min(1),
+  workspaceName: z.string().min(1).optional(),
   tenantId: z.string().min(1),
   role: WorkspaceRoleSchema,
   authMethod: AuthMethodSchema,
@@ -377,6 +380,246 @@ export const OnboardingRecommendationResponseSchema = z.object({
   ),
 })
 
+// --- Assistant -------------------------------------------------------------
+
+// Anthropic-only model catalog exposed in the model selector. `legacy` flags
+// previous-generation models kept available behind a disclosure in the UI.
+export const AssistantModelIdSchema = z.enum([
+  "claude-opus-4-7",
+  "claude-sonnet-4-6",
+  "claude-haiku-4-5",
+  "claude-opus-4-6",
+])
+
+export const DEFAULT_ASSISTANT_MODEL_ID = "claude-opus-4-7" as const
+
+export const AssistantModelInfoSchema = z.object({
+  id: AssistantModelIdSchema,
+  label: z.string().min(1),
+  description: z.string().min(1),
+  legacy: z.boolean(),
+})
+
+// Persisted message content. App-level blocks (not raw Anthropic blocks) so the
+// client stays decoupled from the SDK shape. Images are intentionally omitted
+// for now — attachments ship in a later pass.
+export const AssistantTextBlockSchema = z.object({
+  type: z.literal("text"),
+  text: z.string(),
+})
+
+export const AssistantToolUseBlockSchema = z.object({
+  type: z.literal("tool_use"),
+  id: z.string().min(1),
+  name: z.string().min(1),
+  input: z.record(z.string(), z.unknown()),
+})
+
+export const AssistantToolResultBlockSchema = z.object({
+  type: z.literal("tool_result"),
+  toolUseId: z.string().min(1),
+  content: z.string(),
+  isError: z.boolean().optional(),
+})
+
+const AssistantWebSearchResultSchema = z.object({
+  type: z.literal("web_search_result"),
+  encrypted_content: z.string().min(1),
+  title: z.string(),
+  url: z.string().url(),
+  page_age: z.string().nullable().optional(),
+})
+
+const AssistantWebSearchToolResultErrorSchema = z.object({
+  type: z.literal("web_search_tool_result_error"),
+  error_code: z.enum([
+    "invalid_tool_input",
+    "unavailable",
+    "max_uses_exceeded",
+    "too_many_requests",
+    "query_too_long",
+    "request_too_large",
+  ]),
+})
+
+export const AssistantWebSearchToolResultBlockSchema = z.object({
+  type: z.literal("web_search_tool_result"),
+  toolUseId: z.string().min(1),
+  content: z.union([
+    z.array(AssistantWebSearchResultSchema),
+    AssistantWebSearchToolResultErrorSchema,
+  ]),
+})
+
+export const AssistantContentBlockSchema = z.discriminatedUnion("type", [
+  AssistantTextBlockSchema,
+  AssistantToolUseBlockSchema,
+  AssistantToolResultBlockSchema,
+  AssistantWebSearchToolResultBlockSchema,
+])
+
+export const AssistantMessageRoleSchema = z.enum(["user", "assistant"])
+
+export const AssistantMessageStatusSchema = z.enum([
+  "streaming",
+  "complete",
+  "pending_approval",
+  "error",
+])
+
+export const AssistantTokenUsageSchema = z.object({
+  inputTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+  costUsdCents: z.number().nonnegative(),
+})
+
+export const AssistantMessageSchema = z.object({
+  id: z.string().min(1),
+  conversationId: z.string().min(1),
+  workspaceId: z.string().min(1),
+  role: AssistantMessageRoleSchema,
+  blocks: z.array(AssistantContentBlockSchema),
+  model: z.string().min(1).nullable().optional(),
+  status: AssistantMessageStatusSchema,
+  error: z.string().nullable().optional(),
+  usage: AssistantTokenUsageSchema.nullable().optional(),
+  createdAt: z.coerce.date(),
+})
+
+// Set on a conversation while it waits for the user to approve/deny a high-risk
+// tool the model requested. The turn is suspended until the decision arrives.
+export const AssistantPendingApprovalSchema = z.object({
+  messageId: z.string().min(1),
+  toolUseId: z.string().min(1),
+  name: z.string().min(1),
+  input: z.record(z.string(), z.unknown()),
+})
+
+export const AssistantConversationSchema = z.object({
+  id: z.string().min(1),
+  workspaceId: z.string().min(1),
+  userId: z.string().min(1),
+  title: z.string(),
+  model: AssistantModelIdSchema,
+  webSearchEnabled: z.boolean(),
+  toolsEnabled: z.boolean(),
+  pendingApproval: AssistantPendingApprovalSchema.nullable(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+  lastMessageAt: z.coerce.date(),
+})
+
+export const AssistantConversationSummarySchema = z.object({
+  id: z.string().min(1),
+  title: z.string(),
+  model: AssistantModelIdSchema,
+  hasPendingApproval: z.boolean(),
+  lastMessageAt: z.coerce.date(),
+  createdAt: z.coerce.date(),
+})
+
+export const AssistantConversationListSchema = z.object({
+  conversations: z.array(AssistantConversationSummarySchema),
+})
+
+export const RenameAssistantConversationInputSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+})
+
+export const AssistantConversationDetailSchema = z.object({
+  conversation: AssistantConversationSchema,
+  messages: z.array(AssistantMessageSchema),
+})
+
+export const StartAssistantChatInputSchema = z.object({
+  // Null/omitted starts a new conversation; the server returns its id in the
+  // first `conversation` stream event.
+  conversationId: z.string().min(1).nullable().optional(),
+  content: z.string().min(1).max(32_000),
+  model: AssistantModelIdSchema.default(DEFAULT_ASSISTANT_MODEL_ID),
+  webSearch: z.boolean().default(false),
+  tools: z.boolean().default(true),
+})
+
+export const ApproveAssistantToolInputSchema = z.object({
+  toolUseId: z.string().min(1),
+  decision: z.enum(["approve", "deny"]),
+})
+
+// Wire protocol for the SSE stream. The client reduces these into message state.
+export const AssistantStreamEventSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("conversation"),
+    conversationId: z.string().min(1),
+    title: z.string(),
+  }),
+  z.object({
+    type: z.literal("message_start"),
+    messageId: z.string().min(1),
+    role: AssistantMessageRoleSchema,
+  }),
+  z.object({ type: z.literal("text_delta"), delta: z.string() }),
+  z.object({
+    type: z.literal("tool_use"),
+    toolUseId: z.string().min(1),
+    name: z.string().min(1),
+    input: z.record(z.string(), z.unknown()),
+  }),
+  z.object({
+    type: z.literal("tool_result"),
+    toolUseId: z.string().min(1),
+    content: z.string(),
+    isError: z.boolean(),
+  }),
+  z.object({
+    type: z.literal("tool_approval_required"),
+    toolUseId: z.string().min(1),
+    name: z.string().min(1),
+    input: z.record(z.string(), z.unknown()),
+  }),
+  z.object({
+    type: z.literal("usage"),
+    messageId: z.string().min(1).optional(),
+    inputTokens: z.number().int().nonnegative(),
+    outputTokens: z.number().int().nonnegative(),
+    costUsdCents: z.number().nonnegative(),
+  }),
+  z.object({ type: z.literal("error"), code: z.string(), message: z.string() }),
+  z.object({ type: z.literal("done"), stopReason: z.string().nullable() }),
+])
+
+export type AssistantModelId = z.infer<typeof AssistantModelIdSchema>
+export type AssistantModelInfo = z.infer<typeof AssistantModelInfoSchema>
+
+// Curated catalog rendered by the model selector; shared by API validation and
+// the client UI so the two never drift.
+export const ASSISTANT_MODELS = [
+  {
+    id: "claude-opus-4-7",
+    label: "Opus 4.7",
+    description: "Most capable. Best for complex reasoning and tool use.",
+    legacy: false,
+  },
+  {
+    id: "claude-sonnet-4-6",
+    label: "Sonnet 4.6",
+    description: "Balanced speed and capability for everyday work.",
+    legacy: false,
+  },
+  {
+    id: "claude-haiku-4-5",
+    label: "Haiku 4.5",
+    description: "Fastest and most economical.",
+    legacy: false,
+  },
+  {
+    id: "claude-opus-4-6",
+    label: "Opus 4.6",
+    description: "Previous-generation Opus, kept for continuity.",
+    legacy: true,
+  },
+] as const satisfies readonly AssistantModelInfo[]
+
 export type WorkspaceRole = z.infer<typeof WorkspaceRoleSchema>
 export type Tenant = z.infer<typeof TenantSchema>
 export type Workspace = z.infer<typeof WorkspaceSchema>
@@ -447,3 +690,41 @@ export type SetOnboardingSelectionInput = z.infer<
 >
 export type GrantUsageCreditInput = z.infer<typeof GrantUsageCreditInputSchema>
 export type UsageSummary = z.infer<typeof UsageSummarySchema>
+export type AssistantTextBlock = z.infer<typeof AssistantTextBlockSchema>
+export type AssistantToolUseBlock = z.infer<typeof AssistantToolUseBlockSchema>
+export type AssistantToolResultBlock = z.infer<
+  typeof AssistantToolResultBlockSchema
+>
+export type AssistantWebSearchToolResultBlock = z.infer<
+  typeof AssistantWebSearchToolResultBlockSchema
+>
+export type AssistantContentBlock = z.infer<typeof AssistantContentBlockSchema>
+export type AssistantMessageRole = z.infer<typeof AssistantMessageRoleSchema>
+export type AssistantMessageStatus = z.infer<
+  typeof AssistantMessageStatusSchema
+>
+export type AssistantTokenUsage = z.infer<typeof AssistantTokenUsageSchema>
+export type AssistantMessage = z.infer<typeof AssistantMessageSchema>
+export type AssistantPendingApproval = z.infer<
+  typeof AssistantPendingApprovalSchema
+>
+export type AssistantConversation = z.infer<typeof AssistantConversationSchema>
+export type AssistantConversationSummary = z.infer<
+  typeof AssistantConversationSummarySchema
+>
+export type AssistantConversationList = z.infer<
+  typeof AssistantConversationListSchema
+>
+export type RenameAssistantConversationInput = z.infer<
+  typeof RenameAssistantConversationInputSchema
+>
+export type AssistantConversationDetail = z.infer<
+  typeof AssistantConversationDetailSchema
+>
+export type StartAssistantChatInput = z.infer<
+  typeof StartAssistantChatInputSchema
+>
+export type ApproveAssistantToolInput = z.infer<
+  typeof ApproveAssistantToolInputSchema
+>
+export type AssistantStreamEvent = z.infer<typeof AssistantStreamEventSchema>

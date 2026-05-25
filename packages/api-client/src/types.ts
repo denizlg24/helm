@@ -18,4 +18,12 @@ export interface HelmApiRequestClient {
     body: unknown,
     parse: (value: unknown) => T
   ) => Promise<T>
+  // POST a JSON body and consume a Server-Sent Events response, yielding each
+  // parsed `data:` payload as it arrives.
+  stream: <T>(
+    path: string,
+    body: unknown,
+    parse: (value: unknown) => T,
+    signal?: AbortSignal
+  ) => AsyncGenerator<T, void, unknown>
 }

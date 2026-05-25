@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@workspace/api-client": "workspace:*",
+    "@workspace/assistant": "workspace:*",
     "@workspace/auth": "workspace:*",
     "@workspace/types": "workspace:*",
     "@workspace/ui": "workspace:*",

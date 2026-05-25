@@ -106,7 +106,8 @@
       "dependsOn": [
         "@workspace/types#build",
         "@workspace/db#build",
-        "@workspace/auth#build"
+        "@workspace/auth#build",
+        "@workspace/api-client#build"
       ],
       "passThroughEnv": [
         "DATABASE_URL",

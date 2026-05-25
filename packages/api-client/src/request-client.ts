@@ -106,5 +106,74 @@ export const createRequestClient = (
       parse
     )
 
-  return { request, jsonRequest }
+  async function* stream<T>(
+    path: string,
+    body: unknown,
+    parse: (value: unknown) => T,
+    signal?: AbortSignal
+  ): AsyncGenerator<T, void, unknown> {
+    const headers = new Headers({
+      "content-type": "application/json",
+      accept: "text/event-stream",
+    })
+
+    const authHeaders = await options.getAuthHeaders?.()
+    if (authHeaders) {
+      new Headers(authHeaders).forEach((value, key) => {
+        headers.set(key, value)
+      })
+    }
+
+    const workspaceId = await options.getWorkspaceId?.()
+    if (workspaceId) {
+      headers.set("x-helm-workspace-id", workspaceId)
+    }
+
+    const response = await fetch(new URL(path, options.baseUrl), {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      credentials: "include",
+      signal,
+    })
+
+    await throwForStatus(response)
+
+    const reader = response.body?.getReader()
+    if (!reader) {
+      return
+    }
+
+    const decoder = new TextDecoder()
+    let buffer = ""
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        // Normalize CRLF to LF
+        buffer = buffer.replace(/\r\n/g, "\n")
+
+        let separator = buffer.indexOf("\n\n")
+        while (separator !== -1) {
+          const rawEvent = buffer.slice(0, separator)
+          buffer = buffer.slice(separator + 2)
+          const data = rawEvent
+            .split("\n")
+            .filter((line) => line.startsWith("data:"))
+            .map((line) => line.slice(5).trimStart())
+            .join("\n")
+          if (data.length > 0) {
+            yield parse(JSON.parse(data))
+          }
+          separator = buffer.indexOf("\n\n")
+        }
+      }
+    } finally {
+      reader.releaseLock()
+    }
+  }
+
+  return { request, jsonRequest, stream }
 }

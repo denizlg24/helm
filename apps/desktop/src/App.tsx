@@ -4,6 +4,7 @@ import { AuthHeader, Wordmark } from "@workspace/ui/components/auth-shell"
 import { Button } from "@workspace/ui/components/button"
 import { Spinner } from "@workspace/ui/components/spinner"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { DesktopDashboard } from "./components/desktop-dashboard"
 import { createDesktopAuthClient } from "./lib/auth-client"
 import { keychain } from "./lib/keychain"
 
@@ -213,29 +214,22 @@ export function App() {
     setStatus({ kind: "idle" })
   }, [stopPolling])
 
+  if (status.kind === "connected" && tokenRef.current) {
+    return (
+      <DesktopDashboard
+        token={tokenRef.current}
+        user={status.user}
+        onDisconnect={() => void disconnect()}
+      />
+    )
+  }
+
   return (
     <main className="flex min-h-svh items-center justify-center px-6 py-12">
       <div className="w-full max-w-sm">
         <Wordmark className="mb-8" />
 
-        {status.kind === "connected" ? (
-          <>
-            <AuthHeader
-              description={`Connected as ${status.user.email ?? status.user.id}.`}
-              title="Device connected"
-              wordmark={false}
-            />
-            <Button
-              className="w-full"
-              onClick={() => void disconnect()}
-              size="lg"
-              type="button"
-              variant="outline"
-            >
-              Disconnect
-            </Button>
-          </>
-        ) : status.kind === "needs-onboarding" ? (
+        {status.kind === "needs-onboarding" ? (
           <>
             <AuthHeader
               description="This device is linked to your account, but you haven't set up a workspace yet. Finish onboarding on the console, then check again."
