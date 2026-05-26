@@ -4,6 +4,7 @@ use std::fs;
 
 const KEYRING_SERVICE: &str = "com.helm.desktop";
 const MAX_FILE_SIZE_BYTES: u64 = 100 * 1024 * 1024; // 100 MB
+const MAX_TOTAL_SELECTION_BYTES: u64 = 50 * 1024 * 1024; // 50 MB
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,34 +46,49 @@ fn select_files() -> Result<Vec<SelectedFile>, String> {
         return Ok(Vec::new());
     };
 
-    paths
-        .into_iter()
-        .map(|path| {
-            let name = path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .ok_or_else(|| "Selected file has no readable filename".to_string())?
-                .to_string();
-            let mime_type = mime_guess::from_path(&path)
-                .first_or_octet_stream()
-                .essence_str()
-                .to_string();
-            let metadata = fs::metadata(&path).map_err(|error| error.to_string())?;
-            if metadata.len() > MAX_FILE_SIZE_BYTES {
-                return Err(format!(
-                    "File '{}' exceeds maximum size of {} MB",
-                    name,
-                    MAX_FILE_SIZE_BYTES / (1024 * 1024)
-                ));
-            }
-            let bytes = fs::read(&path).map_err(|error| error.to_string())?;
-            Ok(SelectedFile {
+    let mut total_bytes_read: u64 = 0;
+    let mut result = Vec::new();
+
+    for path in paths {
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| "Selected file has no readable filename".to_string())?
+            .to_string();
+        let mime_type = mime_guess::from_path(&path)
+            .first_or_octet_stream()
+            .essence_str()
+            .to_string();
+        let metadata = fs::metadata(&path).map_err(|error| error.to_string())?;
+        let file_size = metadata.len();
+
+        if file_size > MAX_FILE_SIZE_BYTES {
+            return Err(format!(
+                "File '{}' exceeds maximum size of {} MB",
                 name,
-                mime_type,
-                bytes,
-            })
-        })
-        .collect()
+                MAX_FILE_SIZE_BYTES / (1024 * 1024)
+            ));
+        }
+
+        if total_bytes_read + file_size > MAX_TOTAL_SELECTION_BYTES {
+            return Err(format!(
+                "Total selection size would exceed maximum of {} MB (file '{}' cannot be added)",
+                MAX_TOTAL_SELECTION_BYTES / (1024 * 1024),
+                name
+            ));
+        }
+
+        let bytes = fs::read(&path).map_err(|error| error.to_string())?;
+        total_bytes_read += file_size;
+
+        result.push(SelectedFile {
+            name,
+            mime_type,
+            bytes,
+        });
+    }
+
+    Ok(result)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
