@@ -33,14 +33,23 @@ function toSnakeCase(input: string): string {
 // whose lib.dom vs node:stream/web typings clash under TS strict mode.
 function webStreamToReadable(body: ReadableStream<Uint8Array>): Readable {
   const reader = body.getReader()
+  let inFlight = false
   return new Readable({
-    async read() {
-      try {
-        const { done, value } = await reader.read()
-        this.push(done ? null : value)
-      } catch (error) {
-        this.destroy(error instanceof Error ? error : new Error(String(error)))
+    read() {
+      if (inFlight) {
+        return
       }
+      inFlight = true
+      reader
+        .read()
+        .then(({ done, value }) => {
+          inFlight = false
+          this.push(done ? null : value)
+        })
+        .catch((error) => {
+          inFlight = false
+          this.destroy(error instanceof Error ? error : new Error(String(error)))
+        })
     },
   })
 }
@@ -93,6 +102,7 @@ export class DenizCloudStorageAdapter implements StorageAdapter {
   private readonly logger = new Logger(DenizCloudStorageAdapter.name)
   private readonly baseUrl: string
   private readonly apiKey: string
+  private readonly fetchTimeoutMs = 30_000
   private projectRoot?: FolderRef
   // Resolved `{workspaceId}/blobs` folder per workspace. Cleared on process
   // restart; cold lookups re-resolve via the contents listing.
@@ -102,6 +112,24 @@ export class DenizCloudStorageAdapter implements StorageAdapter {
     const env = DenizCloudEnvSchema.parse(process.env)
     this.baseUrl = env.STORAGE_DENIZ_CLOUD_URL.replace(/\/$/, "")
     this.apiKey = env.STORAGE_DENIZ_CLOUD_API_KEY
+  }
+
+  private async fetchWithTimeout(
+    url: string,
+    options?: RequestInit
+  ): Promise<Response> {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => {
+      controller.abort()
+    }, this.fetchTimeoutMs)
+    try {
+      return await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      })
+    } finally {
+      clearTimeout(timeout)
+    }
   }
 
   async put(input: PutObjectInput): Promise<PutObjectResult> {
@@ -134,7 +162,7 @@ export class DenizCloudStorageAdapter implements StorageAdapter {
     if (range) {
       headers.Range = `bytes=${range.start}-${range.end ?? ""}`
     }
-    const res = await fetch(
+    const res = await this.fetchWithTimeout(
       `${this.baseUrl}/api/files/${encodeURIComponent(backendId)}/download`,
       { headers }
     )
@@ -156,7 +184,7 @@ export class DenizCloudStorageAdapter implements StorageAdapter {
   }
 
   async delete(backendId: string): Promise<void> {
-    const res = await fetch(
+    const res = await this.fetchWithTimeout(
       `${this.baseUrl}/api/files/${encodeURIComponent(backendId)}`,
       { method: "DELETE", headers: this.authHeaders() }
     )
@@ -192,7 +220,7 @@ export class DenizCloudStorageAdapter implements StorageAdapter {
       `targetFolder ${Buffer.from(targetFolderPath).toString("base64")}`,
     ].join(",")
 
-    const res = await fetch(`${this.baseUrl}/api/uploads`, {
+    const res = await this.fetchWithTimeout(`${this.baseUrl}/api/uploads`, {
       method: "POST",
       headers: {
         ...this.authHeaders(),
@@ -238,7 +266,7 @@ export class DenizCloudStorageAdapter implements StorageAdapter {
     body: Uint8Array,
     offset: number
   ): Promise<void> {
-    const res = await fetch(
+    const res = await this.fetchWithTimeout(
       `${this.baseUrl}/api/uploads/${encodeURIComponent(uploadId)}`,
       {
         method: "PATCH",
@@ -287,7 +315,7 @@ export class DenizCloudStorageAdapter implements StorageAdapter {
     if (this.projectRoot) {
       return this.projectRoot
     }
-    const res = await fetch(`${this.baseUrl}/api/folders/roots`, {
+    const res = await this.fetchWithTimeout(`${this.baseUrl}/api/folders/roots`, {
       headers: this.authHeaders(),
     })
     if (!res.ok) {
@@ -308,7 +336,7 @@ export class DenizCloudStorageAdapter implements StorageAdapter {
     if (existing) {
       return { id: existing.id, path: existing.path }
     }
-    const res = await fetch(`${this.baseUrl}/api/folders`, {
+    const res = await this.fetchWithTimeout(`${this.baseUrl}/api/folders`, {
       method: "POST",
       headers: { ...this.authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({ name: rawName, parentId: parent.id }),
@@ -333,7 +361,7 @@ export class DenizCloudStorageAdapter implements StorageAdapter {
   ): Promise<
     z.infer<typeof FolderContentsSchema>["data"] & { totalPages: number }
   > {
-    const res = await fetch(
+    const res = await this.fetchWithTimeout(
       `${this.baseUrl}/api/folders/${encodeURIComponent(folderId)}/contents?page=${page}&limit=100`,
       { headers: this.authHeaders() }
     )

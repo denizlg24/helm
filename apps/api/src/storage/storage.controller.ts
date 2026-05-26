@@ -24,6 +24,15 @@ import { StorageService } from "./storage.service"
 const RefIdSchema = z.string().min(1)
 const RANGE_PATTERN = /^bytes=(\d+)-(\d*)$/u
 
+const ByteRangeSchema = z
+  .object({
+    start: z.coerce.number().int().nonnegative(),
+    end: z.coerce.number().int().nonnegative().optional(),
+  })
+  .refine((data) => data.end === undefined || data.end >= data.start, {
+    message: "end must be >= start",
+  })
+
 function parseRange(header: string | undefined): ByteRange | undefined {
   if (!header) {
     return undefined
@@ -34,7 +43,7 @@ function parseRange(header: string | undefined): ByteRange | undefined {
   }
   const start = Number(match[1])
   const end = match[2] ? Number(match[2]) : undefined
-  return { start, end }
+  return ByteRangeSchema.parse({ start, end })
 }
 
 function fieldValue(

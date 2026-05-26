@@ -39,9 +39,15 @@ async function bootstrap() {
 
   const fastify = app.getHttpAdapter().getInstance()
 
-  const maxUploadBytes = Number(
-    process.env.STORAGE_MAX_UPLOAD_BYTES ?? 1_073_741_824
+  const DEFAULT_MAX_UPLOAD_BYTES = 1_073_741_824
+  const parsedUploadBytes = Number.parseInt(
+    process.env.STORAGE_MAX_UPLOAD_BYTES ?? "",
+    10
   )
+  const maxUploadBytes =
+    Number.isFinite(parsedUploadBytes) && parsedUploadBytes > 0
+      ? parsedUploadBytes
+      : DEFAULT_MAX_UPLOAD_BYTES
   await fastify.register(fastifyMultipart, {
     limits: { fileSize: maxUploadBytes, files: 1 },
   })

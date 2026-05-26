@@ -185,7 +185,7 @@ export class StorageService {
       throw new NotFoundException("File not found")
     }
     const blob = await this.repo.getBlobById(ref.blobId)
-    if (!blob) {
+    if (!blob || blob.workspaceId !== actor.workspaceId) {
       throw new NotFoundException("File content not found")
     }
     const object = await this.adapter.get(blob.backendId, range)
