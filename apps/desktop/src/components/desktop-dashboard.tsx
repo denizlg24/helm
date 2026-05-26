@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core"
 import {
   ChatView,
   ConversationSidebar,
@@ -12,6 +13,46 @@ import { Spinner } from "@workspace/ui/components/spinner"
 import { cn } from "@workspace/ui/lib/utils"
 import { useCallback, useEffect, useState } from "react"
 import { apiClient, setApiToken, setApiWorkspaceId } from "../lib/api"
+
+interface NativeSelectedFile {
+  name: string
+  mimeType: string
+  bytes: number[]
+}
+
+const isNativeSelectedFile = (value: unknown): value is NativeSelectedFile => {
+  if (typeof value !== "object" || value === null) return false
+  const candidate = value as Record<string, unknown>
+  return (
+    typeof candidate.name === "string" &&
+    typeof candidate.mimeType === "string" &&
+    Array.isArray(candidate.bytes) &&
+    candidate.bytes.every(
+      (byte) =>
+        typeof byte === "number" &&
+        Number.isInteger(byte) &&
+        Number.isFinite(byte) &&
+        byte >= 0 &&
+        byte <= 255
+    )
+  )
+}
+
+const selectNativeFiles = async (): Promise<File[]> => {
+  try {
+    const selected = await invoke<unknown>("select_files")
+    if (!Array.isArray(selected)) return []
+    return selected.filter(isNativeSelectedFile).map(
+      (file) =>
+        new File([new Uint8Array(file.bytes)], file.name, {
+          type: file.mimeType,
+        })
+    )
+  } catch (error) {
+    console.error("File selection failed:", error)
+    return []
+  }
+}
 
 export interface DesktopDashboardProps {
   token: string
@@ -156,7 +197,7 @@ export function DesktopDashboard({
         />
 
         <main className="min-h-0 flex-1">
-          <ChatView chat={chat} />
+          <ChatView chat={chat} onSelectFiles={selectNativeFiles} />
         </main>
       </div>
     </div>

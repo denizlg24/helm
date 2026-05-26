@@ -8,6 +8,7 @@ import {
 } from "./modules/assistant"
 import { type BillingModule, createBillingModule } from "./modules/billing"
 import { createDevicesModule, type DevicesModule } from "./modules/devices"
+import { createFilesModule, type FilesModule } from "./modules/files"
 import {
   createOnboardingModule,
   type OnboardingModule,
@@ -31,6 +32,7 @@ export interface HelmApiClient {
   billing: BillingModule
   onboarding: OnboardingModule
   assistant: AssistantModule
+  files: FilesModule
 }
 
 export const createHelmApiClient = (
@@ -46,5 +48,6 @@ export const createHelmApiClient = (
     billing: createBillingModule(requestClient),
     onboarding: createOnboardingModule(requestClient),
     assistant: createAssistantModule(requestClient),
+    files: createFilesModule(requestClient),
   }
 }

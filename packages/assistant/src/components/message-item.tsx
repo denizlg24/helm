@@ -3,7 +3,7 @@
 import type { AssistantMessage } from "@workspace/types"
 import { MarkdownRenderer } from "@workspace/ui/components/markdown-renderer"
 import { cn } from "@workspace/ui/lib/utils"
-import { Code, Eye } from "lucide-react"
+import { Code, Eye, FileText, Image as ImageIcon } from "lucide-react"
 import { useState } from "react"
 import type {
   PendingApproval,
@@ -40,10 +40,21 @@ export function MessageItem({
       .filter((b) => b.type === "text")
       .map((b) => (b.type === "text" ? b.text : ""))
       .join("\n")
+    const attachments = message.blocks.filter((b) => b.type === "attachment")
     return (
       <div className="fade-in slide-in-from-bottom-1 flex animate-in justify-end duration-300">
-        <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-muted/60 px-4 py-2.5 text-foreground/90 text-sm">
-          {text}
+        <div className="flex max-w-[85%] flex-col gap-2 rounded-2xl bg-muted/60 px-4 py-2.5 text-foreground/90 text-sm">
+          {text ? <div className="whitespace-pre-wrap">{text}</div> : null}
+          {attachments.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {attachments.map((attachment) => (
+                <UserAttachment
+                  key={attachment.fileId}
+                  attachment={attachment}
+                />
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
     )
@@ -145,6 +156,31 @@ export function MessageItem({
           ) : null}
         </div>
       ) : null}
+    </div>
+  )
+}
+
+function UserAttachment({
+  attachment,
+}: {
+  attachment: Extract<
+    AssistantMessage["blocks"][number],
+    { type: "attachment" }
+  >
+}) {
+  const isImage = attachment.mimeType.startsWith("image/")
+  const Icon = isImage ? ImageIcon : FileText
+  return (
+    <div className="flex max-w-52 items-center gap-2 rounded-md border border-border/60 bg-background/50 py-1 pr-2 pl-1 text-xs">
+      <div className="flex size-7 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
+        <Icon className="size-3.5" />
+      </div>
+      <div className="min-w-0">
+        <div className="truncate font-medium">{attachment.filename}</div>
+        <div className="truncate text-muted-foreground">
+          {attachment.mimeType}
+        </div>
+      </div>
     </div>
   )
 }

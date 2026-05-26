@@ -401,11 +401,18 @@ export const AssistantModelInfoSchema = z.object({
 })
 
 // Persisted message content. App-level blocks (not raw Anthropic blocks) so the
-// client stays decoupled from the SDK shape. Images are intentionally omitted
-// for now — attachments ship in a later pass.
+// client stays decoupled from the SDK shape.
 export const AssistantTextBlockSchema = z.object({
   type: z.literal("text"),
   text: z.string(),
+})
+
+export const AssistantAttachmentBlockSchema = z.object({
+  type: z.literal("attachment"),
+  fileId: z.string().min(1),
+  filename: z.string().min(1).max(255),
+  mimeType: z.string().min(1),
+  sizeBytes: z.number().int().nonnegative(),
 })
 
 export const AssistantToolUseBlockSchema = z.object({
@@ -453,6 +460,7 @@ export const AssistantWebSearchToolResultBlockSchema = z.object({
 
 export const AssistantContentBlockSchema = z.discriminatedUnion("type", [
   AssistantTextBlockSchema,
+  AssistantAttachmentBlockSchema,
   AssistantToolUseBlockSchema,
   AssistantToolResultBlockSchema,
   AssistantWebSearchToolResultBlockSchema,
@@ -531,15 +539,30 @@ export const AssistantConversationDetailSchema = z.object({
   messages: z.array(AssistantMessageSchema),
 })
 
-export const StartAssistantChatInputSchema = z.object({
-  // Null/omitted starts a new conversation; the server returns its id in the
-  // first `conversation` stream event.
-  conversationId: z.string().min(1).nullable().optional(),
-  content: z.string().min(1).max(32_000),
-  model: AssistantModelIdSchema.default(DEFAULT_ASSISTANT_MODEL_ID),
-  webSearch: z.boolean().default(false),
-  tools: z.boolean().default(true),
+export const AssistantAttachmentInputSchema = z.object({
+  fileId: z.string().min(1),
 })
+
+export const StartAssistantChatInputSchema = z
+  .object({
+    // Null/omitted starts a new conversation; the server returns its id in the
+    // first `conversation` stream event.
+    conversationId: z.string().min(1).nullable().optional(),
+    content: z.string().max(32_000).default("").optional(),
+    attachments: z.array(AssistantAttachmentInputSchema).max(12).default([]),
+    model: AssistantModelIdSchema.default(DEFAULT_ASSISTANT_MODEL_ID),
+    webSearch: z.boolean().default(false),
+    tools: z.boolean().default(true),
+  })
+  .refine(
+    (input) =>
+      input.attachments.length > 0 ||
+      (input.content && input.content.trim().length > 0),
+    {
+      message: "Message content or at least one attachment is required",
+      path: ["content"],
+    }
+  )
 
 export const ApproveAssistantToolInputSchema = z.object({
   toolUseId: z.string().min(1),
@@ -691,6 +714,9 @@ export type SetOnboardingSelectionInput = z.infer<
 export type GrantUsageCreditInput = z.infer<typeof GrantUsageCreditInputSchema>
 export type UsageSummary = z.infer<typeof UsageSummarySchema>
 export type AssistantTextBlock = z.infer<typeof AssistantTextBlockSchema>
+export type AssistantAttachmentBlock = z.infer<
+  typeof AssistantAttachmentBlockSchema
+>
 export type AssistantToolUseBlock = z.infer<typeof AssistantToolUseBlockSchema>
 export type AssistantToolResultBlock = z.infer<
   typeof AssistantToolResultBlockSchema
@@ -720,6 +746,9 @@ export type RenameAssistantConversationInput = z.infer<
 >
 export type AssistantConversationDetail = z.infer<
   typeof AssistantConversationDetailSchema
+>
+export type AssistantAttachmentInput = z.infer<
+  typeof AssistantAttachmentInputSchema
 >
 export type StartAssistantChatInput = z.infer<
   typeof StartAssistantChatInputSchema
