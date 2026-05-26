@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from "@nestjs/common"
 import type {
   ApproveAssistantToolInput,
+  AssistantAttachmentBlock,
+  AssistantContentBlock,
   AssistantConversationDetail,
   AssistantConversationList,
   AssistantConversationSummary,
@@ -9,15 +11,17 @@ import type {
   StartAssistantChatInput,
 } from "@workspace/types"
 // biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
+import { StorageService } from "../storage/storage.service"
+// biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
 import { AssistantRepository } from "./assistant.repository"
 // biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
 import { AssistantStreamService } from "./assistant-stream.service"
 
 type EmitFn = (event: AssistantStreamEvent) => void
 
-const deriveTitle = (content: string): string => {
+const deriveTitle = (content: string, fallback?: string): string => {
   const normalized = content.replace(/\s+/u, " ").trim()
-  if (normalized.length === 0) return "New chat"
+  if (normalized.length === 0) return fallback ?? "New chat"
   return normalized.length > 60 ? `${normalized.slice(0, 60)}…` : normalized
 }
 
@@ -25,7 +29,8 @@ const deriveTitle = (content: string): string => {
 export class AssistantService {
   constructor(
     private readonly repo: AssistantRepository,
-    private readonly stream: AssistantStreamService
+    private readonly stream: AssistantStreamService,
+    private readonly storage: StorageService
   ) {}
 
   async listConversations(
@@ -116,6 +121,22 @@ export class AssistantService {
       return
     }
 
+    let attachmentBlocks: AssistantAttachmentBlock[]
+    try {
+      attachmentBlocks = await this.resolveAttachmentBlocks(actor, input)
+    } catch (error) {
+      emit({
+        type: "error",
+        code: "ATTACHMENT_UNAVAILABLE",
+        message:
+          error instanceof Error
+            ? error.message
+            : "One or more attachments could not be loaded.",
+      })
+      emit({ type: "done", stopReason: "error" })
+      return
+    }
+
     // Apply the per-message model/toggle selection to the conversation.
     await this.repo.updateSettings(actor.workspaceId, conversation._id, {
       model: input.model,
@@ -134,8 +155,11 @@ export class AssistantService {
       conversation._id
     )
     const isFirstMessage = existing.length === 0
+    const titleFallback = attachmentBlocks[0]
+      ? `Attachment: ${attachmentBlocks[0].filename}`
+      : undefined
     const title = isFirstMessage
-      ? deriveTitle(input.content)
+      ? deriveTitle(input.content, titleFallback)
       : conversation.title
     if (isFirstMessage) {
       await this.repo.touchConversation(actor.workspaceId, conversation._id, {
@@ -144,17 +168,42 @@ export class AssistantService {
       conversation = { ...conversation, title }
     }
 
+    const userBlocks: AssistantContentBlock[] = []
+    const trimmedContent = input.content.trim()
+    if (trimmedContent.length > 0) {
+      userBlocks.push({ type: "text", text: trimmedContent })
+    }
+    userBlocks.push(...attachmentBlocks)
+
     await this.repo.appendMessage({
       conversationId: conversation._id,
       workspaceId: actor.workspaceId,
       role: "user",
-      blocks: [{ type: "text", text: input.content }],
+      blocks: userBlocks,
       status: "complete",
     })
 
     emit({ type: "conversation", conversationId: conversation._id, title })
 
     await this.stream.runConversation(actor, conversation, emit)
+  }
+
+  private async resolveAttachmentBlocks(
+    actor: AuthContext,
+    input: StartAssistantChatInput
+  ): Promise<AssistantAttachmentBlock[]> {
+    const blocks: AssistantAttachmentBlock[] = []
+    for (const attachment of input.attachments) {
+      const ref = await this.storage.getMetadata(actor, attachment.fileId)
+      blocks.push({
+        type: "attachment",
+        fileId: ref.id,
+        filename: ref.filename,
+        mimeType: ref.mimeType,
+        sizeBytes: ref.sizeBytes,
+      })
+    }
+    return blocks
   }
 
   async approve(

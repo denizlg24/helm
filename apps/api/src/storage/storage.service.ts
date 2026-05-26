@@ -20,7 +20,8 @@ import {
   STORAGE_ADAPTER,
   type StorageAdapter,
 } from "./adapters/storage-adapter.interface"
-import type { StorageRepository } from "./storage.repository"
+// biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
+import { StorageRepository } from "./storage.repository"
 
 interface UploadMetadata {
   ownerModule?: string

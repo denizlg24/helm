@@ -11,6 +11,8 @@ import { LlmService } from "../llm/llm.service"
 // biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
 import { MongoService } from "../mongo/mongo.service"
 // biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
+import { StorageService } from "../storage/storage.service"
+// biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
 import {
   AssistantRepository,
   type ConversationDoc,
@@ -22,6 +24,18 @@ import {
 } from "./assistant-tools"
 
 const MAX_LOOP_ITERATIONS = 24
+type AssistantImageMimeType =
+  | "image/jpeg"
+  | "image/png"
+  | "image/gif"
+  | "image/webp"
+const MAX_ASSISTANT_IMAGE_BYTES = 5 * 1024 * 1024
+const ASSISTANT_IMAGE_MIME_TYPES = new Set<AssistantImageMimeType>([
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+])
 
 const SYSTEM_PROMPT = `You are Helm's assistant: a private, practical copilot for a personal life dashboard. Helm can include notes, tasks, calendars, people/CRM, inbox triage, resources, publishing, settings, usage, and workspace administration.
 
@@ -103,7 +117,8 @@ export class AssistantStreamService {
   constructor(
     private readonly llm: LlmService,
     private readonly repo: AssistantRepository,
-    private readonly mongo: MongoService
+    private readonly mongo: MongoService,
+    private readonly storage: StorageService
   ) {}
 
   // Drives a conversation to completion or suspension, emitting SSE events.
@@ -139,10 +154,13 @@ export class AssistantStreamService {
       actor.workspaceId,
       conversation._id
     )
-    const working: Anthropic.MessageParam[] = dbMessages.map((m) => ({
-      role: m.role,
-      content: toReplayContentBlocks(m.blocks),
-    }))
+    const working: Anthropic.MessageParam[] = []
+    for (const message of dbMessages) {
+      working.push({
+        role: message.role,
+        content: await this.toReplayContentBlocks(actor, message.blocks),
+      })
+    }
 
     // Maps each tool_use id to the message that produced it, so we can flip the
     // owning message to "complete" once its tools resolve.
@@ -421,78 +439,126 @@ export class AssistantStreamService {
       }
     }
   }
-}
 
-function toContentBlockParam(
-  block: AssistantContentBlock
-): Anthropic.ContentBlockParam {
-  if (block.type === "text") {
-    return { type: "text", text: block.text }
-  }
-  if (block.type === "tool_use") {
-    if (block.name === "web_search") {
-      return {
-        type: "server_tool_use",
-        id: block.id,
-        name: block.name,
-        input: block.input,
+  private async toContentBlockParam(
+    actor: AuthContext,
+    block: AssistantContentBlock
+  ): Promise<Anthropic.ContentBlockParam[]> {
+    if (block.type === "text") {
+      return [{ type: "text", text: block.text }]
+    }
+    if (block.type === "attachment") {
+      const text = `Attached file: ${block.filename} (${block.mimeType}, ${block.sizeBytes} bytes, file id: ${block.fileId})`
+      if (
+        block.sizeBytes > MAX_ASSISTANT_IMAGE_BYTES ||
+        !isAssistantImageMimeType(block.mimeType)
+      ) {
+        return [{ type: "text", text }]
+      }
+
+      try {
+        const { object } = await this.storage.download(actor, block.fileId)
+        const bytes = await streamToBuffer(object.stream)
+        return [
+          { type: "text", text },
+          {
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: block.mimeType,
+              data: bytes.toString("base64"),
+            },
+          },
+        ]
+      } catch (error) {
+        this.logger.warn(
+          `Could not attach image ${block.fileId} to assistant prompt: ${
+            error instanceof Error ? error.message : "unknown error"
+          }`
+        )
+        return [{ type: "text", text }]
       }
     }
-    return {
-      type: "tool_use",
-      id: block.id,
-      name: block.name,
-      input: block.input,
+    if (block.type === "tool_use") {
+      if (block.name === "web_search") {
+        return [
+          {
+            type: "server_tool_use",
+            id: block.id,
+            name: block.name,
+            input: block.input,
+          },
+        ]
+      }
+      return [
+        {
+          type: "tool_use",
+          id: block.id,
+          name: block.name,
+          input: block.input,
+        },
+      ]
     }
-  }
-  if (block.type === "web_search_tool_result") {
-    return {
-      type: "web_search_tool_result",
-      tool_use_id: block.toolUseId,
-      content: block.content,
+    if (block.type === "web_search_tool_result") {
+      return [
+        {
+          type: "web_search_tool_result",
+          tool_use_id: block.toolUseId,
+          content: block.content,
+        },
+      ]
     }
+    return [
+      {
+        type: "tool_result",
+        tool_use_id: block.toolUseId,
+        content: block.content,
+        ...(block.isError ? { is_error: true } : {}),
+      },
+    ]
   }
-  return {
-    type: "tool_result",
-    tool_use_id: block.toolUseId,
-    content: block.content,
-    ...(block.isError ? { is_error: true } : {}),
+
+  private async toReplayContentBlocks(
+    actor: AuthContext,
+    blocks: AssistantContentBlock[]
+  ): Promise<Anthropic.ContentBlockParam[]> {
+    const webSearchResultIds = new Set(
+      blocks
+        .filter((block) => block.type === "web_search_tool_result")
+        .map((block) => block.toolUseId)
+    )
+    const webSearchUseIds = new Set<string>()
+    for (const block of blocks) {
+      if (block.type === "tool_use" && block.name === "web_search") {
+        webSearchUseIds.add(block.id)
+      }
+    }
+
+    const params: Anthropic.ContentBlockParam[] = []
+    for (const block of blocks) {
+      if (
+        block.type === "tool_use" &&
+        block.name === "web_search" &&
+        !webSearchResultIds.has(block.id)
+      ) {
+        continue
+      }
+      if (
+        block.type === "web_search_tool_result" &&
+        !webSearchUseIds.has(block.toolUseId)
+      ) {
+        continue
+      }
+      params.push(...(await this.toContentBlockParam(actor, block)))
+    }
+    return params
   }
 }
 
-function toReplayContentBlocks(
-  blocks: AssistantContentBlock[]
-): Anthropic.ContentBlockParam[] {
-  const webSearchResultIds = new Set(
-    blocks
-      .filter((block) => block.type === "web_search_tool_result")
-      .map((block) => block.toolUseId)
-  )
-  const webSearchUseIds = new Set<string>()
-  for (const block of blocks) {
-    if (block.type === "tool_use" && block.name === "web_search") {
-      webSearchUseIds.add(block.id)
-    }
-  }
-
-  const params: Anthropic.ContentBlockParam[] = []
-  for (const block of blocks) {
-    if (
-      block.type === "tool_use" &&
-      block.name === "web_search" &&
-      !webSearchResultIds.has(block.id)
-    ) {
-      continue
-    }
-    if (
-      block.type === "web_search_tool_result" &&
-      !webSearchUseIds.has(block.toolUseId)
-    ) {
-      continue
-    }
-    params.push(toContentBlockParam(block))
-  }
-  return params
+function isAssistantImageMimeType(
+  mimeType: string
+): mimeType is AssistantImageMimeType {
+  return ASSISTANT_IMAGE_MIME_TYPES.has(mimeType as AssistantImageMimeType)
 }
 
 function mapFinalToBlocks(
@@ -573,4 +639,12 @@ function asBlockArray(
   return typeof content === "string"
     ? [{ type: "text", text: content }]
     : content
+}
+
+async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
+  const chunks: Buffer[] = []
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+  }
+  return Buffer.concat(chunks)
 }

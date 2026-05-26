@@ -6,6 +6,7 @@ import type {
   AssistantMessage,
   AssistantModelId,
   AssistantStreamEvent,
+  FileRef,
 } from "@workspace/types"
 import { DEFAULT_ASSISTANT_MODEL_ID } from "@workspace/types"
 import { useCallback, useReducer, useRef } from "react"
@@ -363,7 +364,9 @@ export interface UseAssistantChat {
   setWebSearch: (enabled: boolean) => void
   tools: boolean
   setTools: (enabled: boolean) => void
-  send: (content: string) => Promise<void>
+  send: (content: string, attachments?: FileRef[]) => Promise<void>
+  uploadAttachment: (file: File) => Promise<FileRef>
+  deleteAttachment: (fileId: string) => Promise<void>
   resolveApproval: (decision: "approve" | "deny") => Promise<void>
   stop: () => void
   newChat: () => void
@@ -412,18 +415,30 @@ export function useAssistantChat(
   currentConversationId.current = state.conversationId
 
   const send = useCallback(
-    async (content: string) => {
+    async (content: string, attachments: FileRef[] = []) => {
       const trimmed = content.trim()
-      if (trimmed.length === 0) return
+      if (trimmed.length === 0 && attachments.length === 0) return
       abortRef.current?.abort()
       const controller = new AbortController()
       abortRef.current = controller
 
+      const blocks: AssistantMessage["blocks"] = []
+      if (trimmed.length > 0) {
+        blocks.push({ type: "text", text: trimmed })
+      }
+      for (const attachment of attachments) {
+        blocks.push({
+          type: "attachment",
+          fileId: attachment.id,
+          filename: attachment.filename,
+          mimeType: attachment.mimeType,
+          sizeBytes: attachment.sizeBytes,
+        })
+      }
+
       dispatch({
         type: "appendUserMessage",
-        message: placeholderMessage(`local-${Date.now()}`, "user", [
-          { type: "text", text: trimmed },
-        ]),
+        message: placeholderMessage(`local-${Date.now()}`, "user", blocks),
       })
 
       const conversationId = currentConversationId.current
@@ -431,6 +446,9 @@ export function useAssistantChat(
         {
           conversationId,
           content: trimmed,
+          attachments: attachments.map((attachment) => ({
+            fileId: attachment.id,
+          })),
           model: modelRef.current,
           webSearch: webSearchRef.current,
           tools: toolsRef.current,
@@ -509,6 +527,13 @@ export function useAssistantChat(
       force()
     },
     send,
+    uploadAttachment: (file) =>
+      client.files.upload({
+        file,
+        filename: file.name,
+        metadata: { ownerModule: "assistant" },
+      }),
+    deleteAttachment: (fileId) => client.files.delete(fileId),
     resolveApproval,
     stop,
     newChat,

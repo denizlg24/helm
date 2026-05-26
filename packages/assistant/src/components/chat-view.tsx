@@ -54,6 +54,7 @@ function RotatingSuggestion({
 
 export interface ChatViewProps {
   chat: UseAssistantChat
+  onSelectFiles?: () => Promise<File[]>
   /** A single static hint. Prefer `suggestions` for the rotating treatment. */
   suggestion?: string
   /** Prompt ideas cross-faded under the clock; falls back to a built-in set. */
@@ -63,6 +64,7 @@ export interface ChatViewProps {
 
 export function ChatView({
   chat,
+  onSelectFiles,
   suggestion,
   suggestions,
   className,
@@ -73,6 +75,9 @@ export function ChatView({
   const composer = (
     <Composer
       onSend={chat.send}
+      onUploadFile={chat.uploadAttachment}
+      onDeleteFile={chat.deleteAttachment}
+      onSelectFiles={onSelectFiles}
       onStop={chat.stop}
       isStreaming={chat.isBusy}
       disabled={composerDisabled}
