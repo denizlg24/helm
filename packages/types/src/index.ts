@@ -548,14 +548,16 @@ export const StartAssistantChatInputSchema = z
     // Null/omitted starts a new conversation; the server returns its id in the
     // first `conversation` stream event.
     conversationId: z.string().min(1).nullable().optional(),
-    content: z.string().max(32_000).default(""),
+    content: z.string().max(32_000).default("").optional(),
     attachments: z.array(AssistantAttachmentInputSchema).max(12).default([]),
     model: AssistantModelIdSchema.default(DEFAULT_ASSISTANT_MODEL_ID),
     webSearch: z.boolean().default(false),
     tools: z.boolean().default(true),
   })
   .refine(
-    (input) => input.content.trim().length > 0 || input.attachments.length > 0,
+    (input) =>
+      input.attachments.length > 0 ||
+      (input.content && input.content.trim().length > 0),
     {
       message: "Message content or at least one attachment is required",
       path: ["content"],

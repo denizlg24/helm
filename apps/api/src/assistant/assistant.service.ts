@@ -159,7 +159,10 @@ export class AssistantService {
       ? `Attachment: ${attachmentBlocks[0].filename}`
       : undefined
     const title = isFirstMessage
-      ? deriveTitle(input.content, titleFallback)
+      ? deriveTitle(
+          input.content ?? `New Conversation on ${new Date().toISOString()}`,
+          titleFallback
+        )
       : conversation.title
     if (isFirstMessage) {
       await this.repo.touchConversation(actor.workspaceId, conversation._id, {
@@ -169,8 +172,8 @@ export class AssistantService {
     }
 
     const userBlocks: AssistantContentBlock[] = []
-    const trimmedContent = input.content.trim()
-    if (trimmedContent.length > 0) {
+    const trimmedContent = input.content?.trim()
+    if (trimmedContent && trimmedContent.length > 0) {
       userBlocks.push({ type: "text", text: trimmedContent })
     }
     userBlocks.push(...attachmentBlocks)
