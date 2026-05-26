@@ -151,7 +151,9 @@ export function Composer({
       void onUploadFile(file)
         .then((ref) => {
           if (removedAttachmentIdsRef.current.delete(localId)) {
-            void onDeleteFile(ref.id)
+            void onDeleteFile(ref.id).catch((error) => {
+              console.error("Failed to delete file during upload:", error)
+            })
             return
           }
           setAttachments((current) =>
@@ -195,7 +197,9 @@ export function Composer({
       return current.filter((attachment) => attachment.localId !== localId)
     })
     if (fileId) {
-      void onDeleteFile(fileId)
+      void onDeleteFile(fileId).catch((error) => {
+        console.error("Failed to delete file:", error)
+      })
     }
   }
 
@@ -298,7 +302,11 @@ export function Composer({
               if (files.length > 0) uploadFiles(files)
             }}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
+              if (
+                event.key === "Enter" &&
+                !event.shiftKey &&
+                !event.nativeEvent.isComposing
+              ) {
                 event.preventDefault()
                 submit()
               }

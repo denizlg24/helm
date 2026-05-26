@@ -92,6 +92,22 @@ export class AssistantService {
     input: StartAssistantChatInput,
     emit: EmitFn
   ): Promise<void> {
+    let attachmentBlocks: AssistantAttachmentBlock[]
+    try {
+      attachmentBlocks = await this.resolveAttachmentBlocks(actor, input)
+    } catch (error) {
+      emit({
+        type: "error",
+        code: "ATTACHMENT_UNAVAILABLE",
+        message:
+          error instanceof Error
+            ? error.message
+            : "One or more attachments could not be loaded.",
+      })
+      emit({ type: "done", stopReason: "error" })
+      return
+    }
+
     let conversation = input.conversationId
       ? await this.repo.getConversation(actor.workspaceId, input.conversationId)
       : await this.repo.createConversation(actor, {
@@ -116,22 +132,6 @@ export class AssistantService {
         code: "APPROVAL_PENDING",
         message:
           "Resolve the pending tool approval before sending a new message.",
-      })
-      emit({ type: "done", stopReason: "error" })
-      return
-    }
-
-    let attachmentBlocks: AssistantAttachmentBlock[]
-    try {
-      attachmentBlocks = await this.resolveAttachmentBlocks(actor, input)
-    } catch (error) {
-      emit({
-        type: "error",
-        code: "ATTACHMENT_UNAVAILABLE",
-        message:
-          error instanceof Error
-            ? error.message
-            : "One or more attachments could not be loaded.",
       })
       emit({ type: "done", stopReason: "error" })
       return

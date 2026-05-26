@@ -36,6 +36,8 @@ const ASSISTANT_IMAGE_MIME_TYPES = new Set<AssistantImageMimeType>([
   "image/gif",
   "image/webp",
 ])
+const MAX_REPLAY_IMAGE_COUNT = 10
+const MAX_REPLAY_IMAGE_TOTAL_BYTES = 20 * 1024 * 1024
 
 const SYSTEM_PROMPT = `You are Helm's assistant: a private, practical copilot for a personal life dashboard. Helm can include notes, tasks, calendars, people/CRM, inbox triage, resources, publishing, settings, usage, and workspace administration.
 
@@ -535,6 +537,8 @@ export class AssistantStreamService {
     }
 
     const params: Anthropic.ContentBlockParam[] = []
+    let imageCount = 0
+    let imageTotalBytes = 0
     for (const block of blocks) {
       if (
         block.type === "tool_use" &&
@@ -549,6 +553,27 @@ export class AssistantStreamService {
       ) {
         continue
       }
+
+      // Check if this is an attachment image block that would be processed
+      if (
+        block.type === "attachment" &&
+        block.sizeBytes <= MAX_ASSISTANT_IMAGE_BYTES &&
+        isAssistantImageMimeType(block.mimeType)
+      ) {
+        const wouldExceedCount = imageCount >= MAX_REPLAY_IMAGE_COUNT
+        const wouldExceedBytes =
+          imageTotalBytes + block.sizeBytes > MAX_REPLAY_IMAGE_TOTAL_BYTES
+        if (wouldExceedCount || wouldExceedBytes) {
+          // Over budget: include as text-only attachment
+          const text = `Attached file: ${block.filename} (${block.mimeType}, ${block.sizeBytes} bytes, file id: ${block.fileId})`
+          params.push({ type: "text", text })
+          continue
+        }
+        // Under budget: count it and process normally
+        imageCount++
+        imageTotalBytes += block.sizeBytes
+      }
+
       params.push(...(await this.toContentBlockParam(actor, block)))
     }
     return params

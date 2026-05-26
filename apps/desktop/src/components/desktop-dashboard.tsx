@@ -27,19 +27,31 @@ const isNativeSelectedFile = (value: unknown): value is NativeSelectedFile => {
     typeof candidate.name === "string" &&
     typeof candidate.mimeType === "string" &&
     Array.isArray(candidate.bytes) &&
-    candidate.bytes.every((byte) => typeof byte === "number")
+    candidate.bytes.every(
+      (byte) =>
+        typeof byte === "number" &&
+        Number.isInteger(byte) &&
+        Number.isFinite(byte) &&
+        byte >= 0 &&
+        byte <= 255
+    )
   )
 }
 
 const selectNativeFiles = async (): Promise<File[]> => {
-  const selected = await invoke<unknown>("select_files")
-  if (!Array.isArray(selected)) return []
-  return selected.filter(isNativeSelectedFile).map(
-    (file) =>
-      new File([new Uint8Array(file.bytes)], file.name, {
-        type: file.mimeType,
-      })
-  )
+  try {
+    const selected = await invoke<unknown>("select_files")
+    if (!Array.isArray(selected)) return []
+    return selected.filter(isNativeSelectedFile).map(
+      (file) =>
+        new File([new Uint8Array(file.bytes)], file.name, {
+          type: file.mimeType,
+        })
+    )
+  } catch (error) {
+    console.error("File selection failed:", error)
+    return []
+  }
 }
 
 export interface DesktopDashboardProps {

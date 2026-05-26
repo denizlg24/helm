@@ -3,6 +3,7 @@ use serde::Serialize;
 use std::fs;
 
 const KEYRING_SERVICE: &str = "com.helm.desktop";
+const MAX_FILE_SIZE_BYTES: u64 = 100 * 1024 * 1024; // 100 MB
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -56,6 +57,14 @@ fn select_files() -> Result<Vec<SelectedFile>, String> {
                 .first_or_octet_stream()
                 .essence_str()
                 .to_string();
+            let metadata = fs::metadata(&path).map_err(|error| error.to_string())?;
+            if metadata.len() > MAX_FILE_SIZE_BYTES {
+                return Err(format!(
+                    "File '{}' exceeds maximum size of {} MB",
+                    name,
+                    MAX_FILE_SIZE_BYTES / (1024 * 1024)
+                ));
+            }
             let bytes = fs::read(&path).map_err(|error| error.to_string())?;
             Ok(SelectedFile {
                 name,

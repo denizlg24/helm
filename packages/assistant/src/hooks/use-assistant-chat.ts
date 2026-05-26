@@ -445,7 +445,7 @@ export function useAssistantChat(
       const stream = client.assistant.streamChat(
         {
           conversationId,
-          content: trimmed,
+          ...(trimmed.length > 0 ? { content: trimmed } : {}),
           attachments: attachments.map((attachment) => ({
             fileId: attachment.id,
           })),
