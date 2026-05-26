@@ -10,6 +10,7 @@ import { ModuleConfigModule } from "./module-configs/module-config.module"
 import { MongoModule } from "./mongo/mongo.module"
 import { OnboardingModule } from "./onboarding/onboarding.module"
 import { RedisModule } from "./redis/redis.module"
+import { StorageModule } from "./storage/storage.module"
 import { WorkspaceModule } from "./workspaces/workspace.module"
 
 @Module({
@@ -26,6 +27,7 @@ import { WorkspaceModule } from "./workspaces/workspace.module"
     BillingModule,
     OnboardingModule,
     AssistantModule,
+    StorageModule,
   ],
 })
 export class AppModule {}

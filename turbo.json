@@ -30,7 +30,11 @@
     "HELM_DESKTOP_CALLBACK_ORIGIN",
     "HELM_DEVICE_CLIENT_ID",
     "ANTHROPIC_API_KEY",
-    "OPENAI_API_KEY"
+    "OPENAI_API_KEY",
+    "STORAGE_DRIVER",
+    "STORAGE_DENIZ_CLOUD_URL",
+    "STORAGE_DENIZ_CLOUD_API_KEY",
+    "STORAGE_MAX_UPLOAD_BYTES"
   ],
   "tasks": {
     "build": {
@@ -64,7 +68,11 @@
         "HELM_DESKTOP_CALLBACK_ORIGIN",
         "HELM_DEVICE_CLIENT_ID",
         "ANTHROPIC_API_KEY",
-        "OPENAI_API_KEY"
+        "OPENAI_API_KEY",
+        "STORAGE_DRIVER",
+        "STORAGE_DENIZ_CLOUD_URL",
+        "STORAGE_DENIZ_CLOUD_API_KEY",
+        "STORAGE_MAX_UPLOAD_BYTES"
       ],
       "inputs": ["$TURBO_DEFAULT$"],
       "outputs": ["dist/**"]
@@ -137,7 +145,11 @@
         "HELM_DEVICE_CLIENT_ID",
         "TAURI_DEV_HOST",
         "ANTHROPIC_API_KEY",
-        "OPENAI_API_KEY"
+        "OPENAI_API_KEY",
+        "STORAGE_DRIVER",
+        "STORAGE_DENIZ_CLOUD_URL",
+        "STORAGE_DENIZ_CLOUD_API_KEY",
+        "STORAGE_MAX_UPLOAD_BYTES"
       ]
     }
   }

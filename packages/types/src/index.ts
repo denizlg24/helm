@@ -728,3 +728,51 @@ export type ApproveAssistantToolInput = z.infer<
   typeof ApproveAssistantToolInputSchema
 >
 export type AssistantStreamEvent = z.infer<typeof AssistantStreamEventSchema>
+
+// --- Files / storage -------------------------------------------------------
+
+// A content-addressed blob. One per unique (workspaceId, sha256). `backendId`
+// is the opaque identifier the active storage adapter uses to fetch/delete the
+// bytes (for the deniz-cloud adapter this is the remote file UUID). `refCount`
+// tracks how many FileRefs point at it; the blob and its backing bytes are
+// purged when it reaches zero.
+export const FileBlobSchema = z.object({
+  id: z.string().min(1),
+  workspaceId: z.string().min(1),
+  tenantId: z.string().min(1),
+  sha256: z.string().regex(/^[a-f0-9]{64}$/u, "Expected lowercase SHA-256 hex"),
+  backendId: z.string().min(1),
+  sizeBytes: z.number().int().nonnegative(),
+  mimeType: z.string().min(1),
+  refCount: z.number().int().nonnegative(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+})
+
+// A logical reference to a blob, owned by a workspace. This is the handle
+// callers receive and store. Optional `ownerModule`/`linkedEntityId` let a
+// module tag the file with what it belongs to (e.g. a note attachment).
+export const FileRefSchema = z.object({
+  id: z.string().min(1),
+  workspaceId: z.string().min(1),
+  tenantId: z.string().min(1),
+  blobId: z.string().min(1),
+  filename: z.string().min(1).max(255),
+  mimeType: z.string().min(1),
+  sizeBytes: z.number().int().nonnegative(),
+  sha256: z.string().regex(/^[a-f0-9]{64}$/u),
+  ownerModule: z.string().min(1).max(64).nullable(),
+  linkedEntityId: z.string().min(1).max(128).nullable(),
+  createdAt: z.coerce.date(),
+})
+
+// Optional metadata sent alongside the multipart file part on upload. The file
+// itself is a binary part, not part of this schema.
+export const UploadFileMetadataSchema = z.object({
+  ownerModule: z.string().min(1).max(64).optional(),
+  linkedEntityId: z.string().min(1).max(128).optional(),
+})
+
+export type FileBlob = z.infer<typeof FileBlobSchema>
+export type FileRef = z.infer<typeof FileRefSchema>
+export type UploadFileMetadata = z.infer<typeof UploadFileMetadataSchema>
