@@ -69,13 +69,82 @@ export class PolarService {
     }
   }
 
-  async createCustomerPortal(workspaceId: string): Promise<{ url: string }> {
+  async createCustomerPortal(
+    workspaceId: string,
+    customerEmail: string
+  ): Promise<{ url: string }> {
     const config = this.getConfig()
-    const session = await this.getClient().customerSessions.create({
-      externalCustomerId: workspaceId,
-      returnUrl: config.POLAR_PORTAL_RETURN_URL,
-    })
-    return { url: session.customerPortalUrl }
+    const client = this.getClient()
+
+    try {
+      const session = await client.customerSessions.create({
+        externalCustomerId: workspaceId,
+        returnUrl: config.POLAR_PORTAL_RETURN_URL,
+      })
+      return { url: session.customerPortalUrl }
+    } catch (error) {
+      if (!this.isCustomerNotFound(error)) {
+        throw error
+      }
+      this.logger.log(
+        `Lazy-creating Polar customer for workspace ${workspaceId}`
+      )
+      await this.ensureCustomer(workspaceId, customerEmail)
+      const session = await client.customerSessions.create({
+        externalCustomerId: workspaceId,
+        returnUrl: config.POLAR_PORTAL_RETURN_URL,
+      })
+      return { url: session.customerPortalUrl }
+    }
+  }
+
+  private async ensureCustomer(
+    workspaceId: string,
+    email: string
+  ): Promise<void> {
+    try {
+      await this.getClient().customers.create({
+        email,
+        externalId: workspaceId,
+        metadata: { workspaceId },
+      })
+    } catch (error) {
+      // 409 / already-exists is fine — another flow created it concurrently.
+      if (!this.isAlreadyExists(error)) {
+        throw error
+      }
+    }
+  }
+
+  private isCustomerNotFound(error: unknown): boolean {
+    const status = this.getStatus(error)
+    if (status === 404) return true
+    const message = this.getMessage(error).toLowerCase()
+    return (
+      message.includes("does not exist") ||
+      message.includes("not found") ||
+      message.includes("resourcenotfound")
+    )
+  }
+
+  private isAlreadyExists(error: unknown): boolean {
+    const status = this.getStatus(error)
+    if (status === 409 || status === 422) return true
+    const message = this.getMessage(error).toLowerCase()
+    return message.includes("already exists")
+  }
+
+  private getStatus(error: unknown): number | null {
+    if (typeof error !== "object" || error === null) return null
+    const candidate = error as { statusCode?: unknown; status?: unknown }
+    const value = candidate.statusCode ?? candidate.status
+    return typeof value === "number" ? value : null
+  }
+
+  private getMessage(error: unknown): string {
+    if (error instanceof Error) return error.message
+    if (typeof error === "string") return error
+    return String(error)
   }
 
   async getProductMetadata(

@@ -13,6 +13,7 @@ import {
   createOnboardingModule,
   type OnboardingModule,
 } from "./modules/onboarding"
+import { createUsageModule, type UsageModule } from "./modules/usage"
 import { createUserModule, type UserModule } from "./modules/user"
 import {
   createWorkspaceModule,
@@ -33,6 +34,7 @@ export interface HelmApiClient {
   onboarding: OnboardingModule
   assistant: AssistantModule
   files: FilesModule
+  usage: UsageModule
 }
 
 export const createHelmApiClient = (
@@ -49,5 +51,6 @@ export const createHelmApiClient = (
     onboarding: createOnboardingModule(requestClient),
     assistant: createAssistantModule(requestClient),
     files: createFilesModule(requestClient),
+    usage: createUsageModule(requestClient),
   }
 }

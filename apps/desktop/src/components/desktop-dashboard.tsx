@@ -71,7 +71,7 @@ export function DesktopDashboard({
   >([])
   const [displayUser, setDisplayUser] = useState(user)
   const [loadingList, setLoadingList] = useState(true)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const refresh = useCallback(async () => {
     try {

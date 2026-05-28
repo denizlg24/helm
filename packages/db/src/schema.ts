@@ -470,6 +470,7 @@ export const llmUsage = pgTable(
     userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
     provider: text("provider").notNull(),
     model: text("model").notNull(),
+    feature: text("feature"),
     inputTokens: integer("input_tokens").notNull().default(0),
     outputTokens: integer("output_tokens").notNull().default(0),
     costUsdCents: integer("cost_usd_cents").notNull().default(0),
@@ -483,6 +484,10 @@ export const llmUsage = pgTable(
     index("llm_usage_workspace_created_idx").on(
       table.workspaceId,
       table.createdAt
+    ),
+    index("llm_usage_workspace_feature_idx").on(
+      table.workspaceId,
+      table.feature
     ),
   ]
 )

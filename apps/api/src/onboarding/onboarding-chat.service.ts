@@ -70,6 +70,7 @@ export class OnboardingChatService {
           effort: "low",
           system: systemPrompt,
           cacheSystem: true,
+          feature: "onboarding",
         }
       )
       const message = this.extractText(result.message as Anthropic.Message)

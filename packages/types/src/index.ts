@@ -191,9 +191,19 @@ export const LlmUsageSchema = z.object({
   createdAt: z.coerce.date(),
 })
 
+export const UsageFeatureSchema = z.enum([
+  "assistant",
+  "onboarding",
+  "embeddings",
+  "email_triage",
+  "note_summarize",
+  "other",
+])
+
 export const RecordLlmUsageInputSchema = z.object({
   provider: z.string().min(1),
   model: z.string().min(1),
+  feature: UsageFeatureSchema.nullable().optional(),
   inputTokens: z.number().int().nonnegative().default(0),
   outputTokens: z.number().int().nonnegative().default(0),
   costUsdCents: z.number().nonnegative().default(0),
@@ -224,12 +234,30 @@ export const UsageSummarySchema = z.object({
   periodEnd: z.coerce.date(),
   monthlyAllowanceUsdCents: z.number().int().nonnegative().nullable(),
   monthCostUsdCents: z.number().int().nonnegative(),
+  monthAllowanceUsedUsdCents: z.number().int().nonnegative(),
+  monthCreditsUsedUsdCents: z.number().int().nonnegative(),
   monthRemainingAllowanceUsdCents: z.number().int().nonnegative().nullable(),
   creditBalanceUsdCents: z.number().int(),
   totalRemainingUsdCents: z.number().int().nullable(),
   requestCount: z.number().int().nonnegative(),
   inputTokens: z.number().int().nonnegative(),
   outputTokens: z.number().int().nonnegative(),
+})
+
+export const UsageBreakdownEntrySchema = z.object({
+  feature: UsageFeatureSchema.nullable(),
+  provider: z.string().min(1),
+  model: z.string().min(1),
+  requestCount: z.number().int().nonnegative(),
+  inputTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+  costUsdCents: z.number().int().nonnegative(),
+})
+
+export const UsageBreakdownResponseSchema = z.object({
+  periodStart: z.coerce.date(),
+  periodEnd: z.coerce.date(),
+  entries: z.array(UsageBreakdownEntrySchema),
 })
 
 // --- Billing (Polar) -------------------------------------------------------
@@ -670,6 +698,7 @@ export type ApiTokenRateLimit = z.infer<typeof ApiTokenRateLimitSchema>
 export type WorkspaceLimits = z.infer<typeof WorkspaceLimitsSchema>
 export type LlmUsage = z.infer<typeof LlmUsageSchema>
 export type RecordLlmUsageInput = z.infer<typeof RecordLlmUsageInputSchema>
+export type UsageFeature = z.infer<typeof UsageFeatureSchema>
 export type UsageCreditEntryType = z.infer<typeof UsageCreditEntryTypeSchema>
 export type UsageCreditSource = z.infer<typeof UsageCreditSourceSchema>
 export type PlanId = z.infer<typeof PlanIdSchema>
@@ -713,6 +742,10 @@ export type SetOnboardingSelectionInput = z.infer<
 >
 export type GrantUsageCreditInput = z.infer<typeof GrantUsageCreditInputSchema>
 export type UsageSummary = z.infer<typeof UsageSummarySchema>
+export type UsageBreakdownEntry = z.infer<typeof UsageBreakdownEntrySchema>
+export type UsageBreakdownResponse = z.infer<
+  typeof UsageBreakdownResponseSchema
+>
 export type AssistantTextBlock = z.infer<typeof AssistantTextBlockSchema>
 export type AssistantAttachmentBlock = z.infer<
   typeof AssistantAttachmentBlockSchema

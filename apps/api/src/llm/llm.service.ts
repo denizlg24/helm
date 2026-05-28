@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk"
 import { HttpException, Injectable, Logger } from "@nestjs/common"
-import type { AuthContext } from "@workspace/types"
+import type { AuthContext, UsageFeature } from "@workspace/types"
 import OpenAI, { APIError as OpenAIAPIError } from "openai"
 import type { ResponseCreateAndStreamParams } from "openai/lib/responses/ResponseStream"
 import type {
@@ -59,6 +59,7 @@ export interface LlmCallOptions {
   toolChoice?: Anthropic.ToolChoice
   record?: boolean
   enforceBudget?: boolean
+  feature?: UsageFeature
 }
 
 export interface LlmResult {
@@ -494,6 +495,7 @@ export class LlmService {
       await this.usageService.recordUsage(actor, {
         provider,
         model,
+        feature: options.feature ?? null,
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
         costUsdCents: usage.costUsdCents,
