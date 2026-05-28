@@ -61,6 +61,6 @@ export class BillingController {
   @Post("portal")
   @RequireScopes("billing:write")
   async portal(@CurrentAuthContext() authContext: AuthContext) {
-    return this.polarService.createCustomerPortal(authContext.workspaceId)
+    return this.billingService.createPortal(authContext)
   }
 }

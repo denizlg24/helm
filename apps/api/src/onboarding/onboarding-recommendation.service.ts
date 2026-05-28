@@ -127,6 +127,7 @@ export class OnboardingRecommendationService {
           effort: "low",
           system: systemPrompt,
           cacheSystem: true,
+          feature: "onboarding",
         }
       )
 

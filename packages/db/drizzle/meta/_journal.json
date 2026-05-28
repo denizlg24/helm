@@ -78,6 +78,13 @@
       "when": 1779639605025,
       "tag": "0010_giant_prodigy",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1779983925111,
+      "tag": "0011_bizarre_toxin",
+      "breakpoints": true
     }
   ]
 }

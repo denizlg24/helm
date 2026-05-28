@@ -10,11 +10,14 @@ import {
   sum,
   usageCredits,
 } from "@workspace/db"
-import type {
-  AuthContext,
-  GrantUsageCreditInput,
-  RecordLlmUsageInput,
-  UsageSummary,
+import {
+  type AuthContext,
+  type GrantUsageCreditInput,
+  type RecordLlmUsageInput,
+  type UsageBreakdownResponse,
+  type UsageFeature,
+  UsageFeatureSchema,
+  type UsageSummary,
 } from "@workspace/types"
 // biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
 import { AuditService } from "../audit/audit.service"
@@ -44,6 +47,12 @@ export class UsageService {
     private readonly entitlementService: EntitlementService,
     private readonly auditService: AuditService
   ) {}
+
+  private parseFeature(value: string | null): UsageFeature | null {
+    if (value === null) return null
+    const parsed = UsageFeatureSchema.safeParse(value)
+    return parsed.success ? parsed.data : "other"
+  }
 
   private monthBounds(now: Date = new Date()): MonthBounds {
     const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
@@ -118,27 +127,75 @@ export class UsageService {
     ])
 
     const allowance = limits.llmCostUsdCentsPerMonth ?? null
+    const allowanceUsed =
+      allowance === null ? 0 : Math.min(aggregate.costUsdCents, allowance)
+    const creditsUsed =
+      allowance === null
+        ? aggregate.costUsdCents
+        : Math.max(0, aggregate.costUsdCents - allowance)
     const monthRemainingAllowance =
-      allowance === null
-        ? null
-        : Math.max(0, allowance - aggregate.costUsdCents)
+      allowance === null ? null : Math.max(0, allowance - allowanceUsed)
     const totalRemaining =
-      allowance === null
+      monthRemainingAllowance === null
         ? null
-        : Math.max(0, allowance - aggregate.costUsdCents) +
-          Math.max(0, creditBalance)
+        : monthRemainingAllowance + Math.max(0, creditBalance)
 
     return {
       periodStart: bounds.start,
       periodEnd: bounds.end,
       monthlyAllowanceUsdCents: allowance,
       monthCostUsdCents: aggregate.costUsdCents,
+      monthAllowanceUsedUsdCents: allowanceUsed,
+      monthCreditsUsedUsdCents: creditsUsed,
       monthRemainingAllowanceUsdCents: monthRemainingAllowance,
       creditBalanceUsdCents: creditBalance,
       totalRemainingUsdCents: totalRemaining,
       requestCount: aggregate.requestCount,
       inputTokens: aggregate.inputTokens,
       outputTokens: aggregate.outputTokens,
+    }
+  }
+
+  async getMonthlyBreakdown(
+    workspaceId: string
+  ): Promise<UsageBreakdownResponse> {
+    const bounds = this.monthBounds()
+    const rows = await db
+      .select({
+        feature: llmUsage.feature,
+        provider: llmUsage.provider,
+        model: llmUsage.model,
+        requests: count(),
+        input: sum(llmUsage.inputTokens),
+        output: sum(llmUsage.outputTokens),
+        cost: sum(llmUsage.costUsdCents),
+      })
+      .from(llmUsage)
+      .where(
+        and(
+          eq(llmUsage.workspaceId, workspaceId),
+          gte(llmUsage.createdAt, bounds.start),
+          lt(llmUsage.createdAt, bounds.end)
+        )
+      )
+      .groupBy(llmUsage.feature, llmUsage.provider, llmUsage.model)
+
+    const entries = rows
+      .map((row) => ({
+        feature: this.parseFeature(row.feature),
+        provider: row.provider,
+        model: row.model,
+        requestCount: toInt(row.requests),
+        inputTokens: toInt(row.input),
+        outputTokens: toInt(row.output),
+        costUsdCents: toInt(row.cost),
+      }))
+      .sort((a, b) => b.costUsdCents - a.costUsdCents)
+
+    return {
+      periodStart: bounds.start,
+      periodEnd: bounds.end,
+      entries,
     }
   }
 
@@ -206,6 +263,7 @@ export class UsageService {
           userId: input.userId ?? authContext.userId,
           provider: input.provider,
           model: input.model,
+          feature: input.feature ?? null,
           inputTokens: input.inputTokens,
           outputTokens: input.outputTokens,
           costUsdCents: Math.round(cost),

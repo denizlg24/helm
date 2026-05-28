@@ -13,6 +13,7 @@ import {
 } from "@workspace/db"
 import {
   type ActiveCheckoutSession,
+  type AuthContext,
   type BillingSummaryResponse,
   type PlanId,
   type Subscription,
@@ -322,7 +323,10 @@ export class BillingService {
     const checkout = await this.polarService.createCheckout({
       productId: params.productId,
       workspaceId: context.workspaceId,
-      customerEmail: await this.getUserEmail(params.userId, context.workspaceId),
+      customerEmail: await this.getUserEmail(
+        params.userId,
+        context.workspaceId
+      ),
       successUrl: params.successUrl,
     })
 
@@ -357,6 +361,20 @@ export class BillingService {
     return { checkoutId: checkout.checkoutId, url: checkout.url }
   }
 
+  async createPortal(authContext: AuthContext): Promise<{ url: string }> {
+    const email = await this.getUserEmail(
+      authContext.userId,
+      authContext.workspaceId
+    )
+    if (!email) {
+      throw new Error("Could not resolve a billing email for this workspace.")
+    }
+    return this.polarService.createCustomerPortal(
+      authContext.workspaceId,
+      email
+    )
+  }
+
   private async getUserEmail(
     userId: string,
     workspaceId: string
@@ -365,7 +383,9 @@ export class BillingService {
       .select({ email: userTable.email })
       .from(userTable)
       .innerJoin(member, eq(member.userId, userTable.id))
-      .where(and(eq(userTable.id, userId), eq(member.organizationId, workspaceId)))
+      .where(
+        and(eq(userTable.id, userId), eq(member.organizationId, workspaceId))
+      )
       .limit(1)
 
     return rows[0]?.email

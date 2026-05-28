@@ -218,6 +218,7 @@ export class AssistantStreamService {
         model: conversation.model,
         system: buildSystemPrompt(actor),
         cacheSystem: true,
+        feature: "assistant",
         ...(tools.length > 0 ? { tools } : {}),
       })
 

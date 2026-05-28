@@ -18,4 +18,10 @@ export class UsageController {
   async summary(@CurrentAuthContext() authContext: AuthContext) {
     return this.usageService.getMonthlySummary(authContext.workspaceId)
   }
+
+  @Get("breakdown")
+  @RequireScopes("usage:read")
+  async breakdown(@CurrentAuthContext() authContext: AuthContext) {
+    return this.usageService.getMonthlyBreakdown(authContext.workspaceId)
+  }
 }
