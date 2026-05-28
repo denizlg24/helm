@@ -246,8 +246,8 @@ export const UsageSummarySchema = z.object({
 
 export const UsageBreakdownEntrySchema = z.object({
   feature: UsageFeatureSchema.nullable(),
-  provider: z.string(),
-  model: z.string(),
+  provider: z.string().min(1),
+  model: z.string().min(1),
   requestCount: z.number().int().nonnegative(),
   inputTokens: z.number().int().nonnegative(),
   outputTokens: z.number().int().nonnegative(),

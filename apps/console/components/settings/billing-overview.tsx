@@ -14,6 +14,7 @@ import {
 import { Skeleton } from "@workspace/ui/components/skeleton"
 import { toast } from "@workspace/ui/components/sonner"
 import { ArrowUpRightIcon, ExternalLinkIcon } from "lucide-react"
+import Link from "next/link"
 import { useCallback, useEffect, useState } from "react"
 import { apiClient } from "../../lib/api-client"
 
@@ -182,12 +183,12 @@ export function BillingOverviewSection() {
           <Card className="border-dashed">
             <CardContent className="py-10 text-center text-muted-foreground text-sm">
               No paid modules. Enable more from{" "}
-              <a
+              <Link
                 href="/settings/modules"
                 className="font-medium text-foreground underline-offset-4 hover:underline"
               >
                 Modules
-              </a>
+              </Link>
               .
             </CardContent>
           </Card>
@@ -230,10 +231,10 @@ export function BillingOverviewSection() {
           </p>
         </div>
         <Button asChild variant="outline">
-          <a href="/settings/usage">
+          <Link href="/settings/usage">
             View usage
             <ArrowUpRightIcon className="size-4" />
-          </a>
+          </Link>
         </Button>
       </section>
     </div>

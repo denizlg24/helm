@@ -131,7 +131,7 @@ export class UsageService {
       allowance === null ? 0 : Math.min(aggregate.costUsdCents, allowance)
     const creditsUsed =
       allowance === null
-        ? aggregate.costUsdCents
+        ? 0
         : Math.max(0, aggregate.costUsdCents - allowance)
     const monthRemainingAllowance =
       allowance === null ? null : Math.max(0, allowance - allowanceUsed)

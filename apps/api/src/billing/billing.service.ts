@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common"
+import { BadRequestException, Injectable, Logger } from "@nestjs/common"
 import {
   and,
   db,
@@ -367,7 +367,7 @@ export class BillingService {
       authContext.workspaceId
     )
     if (!email) {
-      throw new Error("Could not resolve a billing email for this workspace.")
+      throw new BadRequestException("Could not resolve a billing email for this workspace.")
     }
     return this.polarService.createCustomerPortal(
       authContext.workspaceId,
