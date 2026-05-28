@@ -367,7 +367,9 @@ export class BillingService {
       authContext.workspaceId
     )
     if (!email) {
-      throw new BadRequestException("Could not resolve a billing email for this workspace.")
+      throw new BadRequestException(
+        "Could not resolve a billing email for this workspace."
+      )
     }
     return this.polarService.createCustomerPortal(
       authContext.workspaceId,

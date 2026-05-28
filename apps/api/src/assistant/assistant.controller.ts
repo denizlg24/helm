@@ -14,8 +14,8 @@ import {
   RenameAssistantConversationInputSchema,
   StartAssistantChatInputSchema,
 } from "@workspace/types"
-import { z } from "zod"
 import type { FastifyReply } from "fastify"
+import { z } from "zod"
 import {
   AuditSensitive,
   CurrentAuthContext,

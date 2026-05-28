@@ -48,7 +48,9 @@ function webStreamToReadable(body: ReadableStream<Uint8Array>): Readable {
         })
         .catch((error) => {
           inFlight = false
-          this.destroy(error instanceof Error ? error : new Error(String(error)))
+          this.destroy(
+            error instanceof Error ? error : new Error(String(error))
+          )
         })
     },
   })
@@ -315,9 +317,12 @@ export class DenizCloudStorageAdapter implements StorageAdapter {
     if (this.projectRoot) {
       return this.projectRoot
     }
-    const res = await this.fetchWithTimeout(`${this.baseUrl}/api/folders/roots`, {
-      headers: this.authHeaders(),
-    })
+    const res = await this.fetchWithTimeout(
+      `${this.baseUrl}/api/folders/roots`,
+      {
+        headers: this.authHeaders(),
+      }
+    )
     if (!res.ok) {
       throw await this.toError(res)
     }
