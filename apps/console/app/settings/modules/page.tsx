@@ -1,7 +1,5 @@
-export default function Page() {
-  return (
-    <main>
-      <h1>Modules</h1>
-    </main>
-  )
+import { ModulesSettingsSection } from "../../../components/settings/modules-section"
+
+export default function ModulesSettingsPage() {
+  return <ModulesSettingsSection />
 }

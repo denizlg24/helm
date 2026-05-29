@@ -92,12 +92,22 @@ export class PolarWebhookService {
       case "subscription.updated":
       case "subscription.active":
       case "subscription.canceled":
+      case "subscription.uncanceled":
+      case "subscription.past_due":
+        this.polarService.invalidateSubscriptionAmounts(event.data.id)
         await this.syncSubscription(event.data)
         break
       case "subscription.revoked":
+        this.polarService.invalidateSubscriptionAmounts(event.data.id)
         await this.revokeSubscription(event.data)
         break
       case "order.paid":
+        // A new invoice changes the latest-order amounts for its subscription.
+        if (event.data.subscriptionId) {
+          this.polarService.invalidateSubscriptionAmounts(
+            event.data.subscriptionId
+          )
+        }
         await this.handleOrderPaid(event.data)
         break
       default:

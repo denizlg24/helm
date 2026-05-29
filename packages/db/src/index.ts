@@ -26,6 +26,7 @@ export {
   inArray,
   isNull,
   lt,
+  ne,
   or,
   sql,
   sum,

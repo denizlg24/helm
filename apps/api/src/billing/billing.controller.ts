@@ -3,10 +3,13 @@ import {
   Body,
   Controller,
   Get,
+  Param,
   Post,
 } from "@nestjs/common"
 import {
   type AuthContext,
+  type ChangePlanInput,
+  ChangePlanInputSchema,
   type CheckoutInput,
   CheckoutInputSchema,
 } from "@workspace/types"
@@ -62,5 +65,45 @@ export class BillingController {
   @RequireScopes("billing:write")
   async portal(@CurrentAuthContext() authContext: AuthContext) {
     return this.billingService.createPortal(authContext)
+  }
+
+  @Get("checkout/:checkoutId")
+  @RequireScopes("billing:read")
+  async checkoutStatus(
+    @CurrentAuthContext() authContext: AuthContext,
+    @Param("checkoutId") checkoutId: string
+  ) {
+    return this.billingService.getCheckoutStatus(
+      authContext.workspaceId,
+      checkoutId
+    )
+  }
+
+  @Post("plan/change")
+  @RequireScopes("billing:write")
+  async changePlan(
+    @CurrentAuthContext() authContext: AuthContext,
+    @Body() body: ChangePlanInput
+  ) {
+    const input = ChangePlanInputSchema.parse(body)
+    return this.billingService.changePlan(authContext, input.productId)
+  }
+
+  @Post("subscriptions/:subscriptionId/resume")
+  @RequireScopes("billing:write")
+  async resumeSubscription(
+    @CurrentAuthContext() authContext: AuthContext,
+    @Param("subscriptionId") subscriptionId: string
+  ) {
+    return this.billingService.resumeSubscription(authContext, subscriptionId)
+  }
+
+  @Post("subscriptions/:subscriptionId/cancel")
+  @RequireScopes("billing:write")
+  async cancelSubscription(
+    @CurrentAuthContext() authContext: AuthContext,
+    @Param("subscriptionId") subscriptionId: string
+  ) {
+    return this.billingService.cancelSubscription(authContext, subscriptionId)
   }
 }

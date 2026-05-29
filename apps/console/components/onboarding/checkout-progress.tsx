@@ -360,6 +360,9 @@ export function OnboardingCheckoutProgress() {
                   / month
                 </span>
               </p>
+              <p className="mt-1 text-muted-foreground text-xs">
+                Excl. tax — VAT/sales tax added at checkout.
+              </p>
             </div>
 
             <div className="space-y-3 border-border border-t pt-6 text-sm">

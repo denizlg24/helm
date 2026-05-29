@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, Logger } from "@nestjs/common"
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from "@nestjs/common"
 import {
   and,
   db,
@@ -15,6 +20,8 @@ import {
   type ActiveCheckoutSession,
   type AuthContext,
   type BillingSummaryResponse,
+  type CancelSubscriptionResponse,
+  type CheckoutStatusResponse,
   type PlanId,
   type Subscription,
   type SubscriptionProductKind,
@@ -31,7 +38,7 @@ import { ModuleConfigService } from "../module-configs/module-config.service"
 import { OnboardingSelectionService } from "../onboarding/onboarding-selection.service"
 // biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
 import { UsageService } from "../usage/usage.service"
-import { PLAN_DEFINITIONS } from "./billing.catalog"
+import { PLAN_DEFINITIONS, resolveEffect } from "./billing.catalog"
 // biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
 import { PolarService } from "./polar.service"
 
@@ -298,6 +305,21 @@ export class BillingService {
     context: WorkspaceContext,
     params: { productId: string; successUrl?: string; userId: string }
   ): Promise<{ checkoutId: string; url: string }> {
+    // Detect-and-resume: if the workspace has a canceled subscription for the
+    // same product and Polar still considers it revivable (cancel-at-period-end
+    // style, not a hard revoke), un-cancel it instead of opening a new
+    // checkout. Avoids the "checkout succeeds but no new sub appears" trap
+    // when a previous sub blocks creation of a fresh one on the same product.
+    const resumed = await this.tryResumeCanceledForProduct(
+      context,
+      params.productId,
+      params.successUrl,
+      params.userId
+    )
+    if (resumed) {
+      return resumed
+    }
+
     const now = new Date()
     const existing = await db
       .select({
@@ -359,6 +381,450 @@ export class BillingService {
       })
 
     return { checkoutId: checkout.checkoutId, url: checkout.url }
+  }
+
+  async getCheckoutStatus(
+    workspaceId: string,
+    checkoutId: string
+  ): Promise<CheckoutStatusResponse> {
+    const rows = await db
+      .select({
+        id: polarCheckoutSessions.id,
+        tenantId: polarCheckoutSessions.tenantId,
+      })
+      .from(polarCheckoutSessions)
+      .where(
+        and(
+          eq(polarCheckoutSessions.workspaceId, workspaceId),
+          eq(polarCheckoutSessions.polarCheckoutId, checkoutId)
+        )
+      )
+      .limit(1)
+
+    const session = rows[0]
+    if (!session) {
+      throw new NotFoundException("Checkout not found for this workspace")
+    }
+
+    const status = await this.polarService.getCheckoutStatus(checkoutId)
+
+    // Best-effort reconciliation: if the checkout has settled but the
+    // matching subscription hasn't landed in our DB yet (webhook hasn't
+    // reached us, or the previous canceled slot blocked a previous attempt),
+    // pull the subscription from Polar and persist it directly.
+    if (status.status === "succeeded" || status.status === "confirmed") {
+      try {
+        await this.reconcileFromCheckout(
+          { workspaceId, tenantId: session.tenantId },
+          checkoutId
+        )
+      } catch (reconcileError) {
+        this.logger.warn(
+          `Reconcile from checkout ${checkoutId} failed: ${String(reconcileError)}`
+        )
+      }
+    }
+
+    return status
+  }
+
+  /**
+   * If the workspace has a canceled subscription for this product and Polar
+   * still considers it revivable, resume it instead of creating a new
+   * checkout. Returns a synthetic `{checkoutId, url}` that points the
+   * browser back at `/settings/billing?resumed=...` so the user lands in the
+   * billing UI showing the now-active plan/module — no Polar redirect at all.
+   * Returns null when no resume is possible; caller falls through to normal
+   * checkout creation.
+   */
+  private async tryResumeCanceledForProduct(
+    context: WorkspaceContext,
+    productId: string,
+    successUrl: string | undefined,
+    userId: string
+  ): Promise<{ checkoutId: string; url: string } | null> {
+    const rows = await db
+      .select()
+      .from(subscriptions)
+      .where(
+        and(
+          eq(subscriptions.workspaceId, context.workspaceId),
+          eq(subscriptions.polarProductId, productId),
+          eq(subscriptions.status, "canceled")
+        )
+      )
+      .limit(1)
+
+    const candidate = rows[0]
+    if (!candidate?.polarSubscriptionId) {
+      return null
+    }
+
+    const polar = await this.polarService.getSubscription(
+      candidate.polarSubscriptionId
+    )
+    if (!polar) {
+      return null
+    }
+
+    // Polar will only reactivate a subscription that is still in an
+    // "active-but-scheduled-to-cancel" state. A subscription that was hard
+    // revoked (status='canceled' on Polar) is terminal — caller must fall
+    // through to a fresh checkout.
+    const revivable =
+      polar.cancelAtPeriodEnd &&
+      (polar.status === "active" || polar.status === "trialing")
+    if (!revivable) {
+      return null
+    }
+
+    await this.polarService.resumeSubscription(candidate.polarSubscriptionId)
+
+    const metadata = await this.polarService.getProductMetadata(productId)
+    const effect = resolveEffect(metadata)
+    if (!effect) {
+      this.logger.warn(
+        `Resume: product ${productId} has no Helm effect; subscription will not reactivate locally`
+      )
+      return null
+    }
+
+    const polarShape: PolarSubscriptionShape = {
+      id: polar.id,
+      customerId: polar.customerId,
+      productId: polar.productId,
+      // Resuming returns the sub to its prior active state; mirror that.
+      status: "active",
+      createdAt: polar.createdAt,
+      currentPeriodEnd: polar.currentPeriodEnd,
+      cancelAtPeriodEnd: false,
+    }
+
+    if (effect.kind === "plan") {
+      await this.activatePlan(context, effect.plan, polarShape)
+    } else if (effect.kind === "module") {
+      const moduleId = effect.moduleIds[0]
+      if (moduleId) {
+        await this.activateModule(context, moduleId, polarShape)
+      }
+    }
+
+    await this.auditService.writeSystem(context, {
+      action: "billing.subscription.resume_via_checkout",
+      resourceType: "subscription",
+      resourceId: candidate.id,
+      metadataJson: {
+        productId,
+        polarSubscriptionId: candidate.polarSubscriptionId,
+        actorUserId: userId,
+      },
+    })
+
+    const origin = (() => {
+      if (!successUrl) return null
+      try {
+        return new URL(successUrl).origin
+      } catch {
+        return null
+      }
+    })()
+    const url = origin
+      ? `${origin}/settings/billing?resumed=${encodeURIComponent(productId)}`
+      : "/settings/billing"
+
+    return {
+      checkoutId: `resumed-${candidate.polarSubscriptionId}`,
+      url,
+    }
+  }
+
+  /**
+   * Pull the subscription Polar created for this checkout and persist it via
+   * the same activatePlan / activateModule paths used by the webhook handler.
+   * Idempotent: re-running on an already-synced subscription is a no-op
+   * thanks to `upsertSubscription`'s ON CONFLICT logic.
+   */
+  private async reconcileFromCheckout(
+    context: WorkspaceContext,
+    checkoutId: string
+  ): Promise<void> {
+    const polarSubscriptionId =
+      await this.polarService.getCheckoutSubscriptionId(checkoutId)
+    if (!polarSubscriptionId) {
+      return
+    }
+
+    const existing = await db
+      .select({
+        id: subscriptions.id,
+        status: subscriptions.status,
+      })
+      .from(subscriptions)
+      .where(eq(subscriptions.polarSubscriptionId, polarSubscriptionId))
+      .limit(1)
+    if (existing[0] && existing[0].status !== "canceled") {
+      return
+    }
+
+    const subscription =
+      await this.polarService.getSubscription(polarSubscriptionId)
+    if (!subscription) {
+      return
+    }
+
+    const metadata = await this.polarService.getProductMetadata(
+      subscription.productId
+    )
+    const effect = resolveEffect(metadata)
+    if (!effect) {
+      this.logger.warn(
+        `Reconcile: product ${subscription.productId} has no Helm effect`
+      )
+      return
+    }
+
+    const polar: PolarSubscriptionShape = {
+      id: subscription.id,
+      customerId: subscription.customerId,
+      productId: subscription.productId,
+      status: subscription.status,
+      createdAt: subscription.createdAt,
+      currentPeriodEnd: subscription.currentPeriodEnd,
+      cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+    }
+
+    if (effect.kind === "plan") {
+      await this.activatePlan(context, effect.plan, polar)
+    } else if (effect.kind === "module") {
+      const moduleId = effect.moduleIds[0]
+      if (moduleId) {
+        await this.activateModule(context, moduleId, polar)
+      }
+    }
+  }
+
+  async cancelSubscription(
+    context: AuthContext,
+    subscriptionId: string
+  ): Promise<CancelSubscriptionResponse> {
+    const rows = await db
+      .select()
+      .from(subscriptions)
+      .where(
+        and(
+          eq(subscriptions.id, subscriptionId),
+          eq(subscriptions.workspaceId, context.workspaceId)
+        )
+      )
+      .limit(1)
+
+    const subscription = rows[0]
+    if (!subscription) {
+      throw new NotFoundException("Subscription not found")
+    }
+    if (!subscription.polarSubscriptionId) {
+      throw new BadRequestException(
+        "Subscription is not linked to a Polar subscription"
+      )
+    }
+    if (subscription.status === "canceled") {
+      throw new BadRequestException("Subscription is already canceled")
+    }
+    if (subscription.cancelAtPeriodEnd) {
+      return {
+        subscriptionId: subscription.id,
+        status: SubscriptionStatusSchema.parse(subscription.status),
+        cancelAtPeriodEnd: true,
+        currentPeriodEnd: subscription.currentPeriodEnd ?? null,
+      }
+    }
+
+    await this.polarService.cancelAtPeriodEnd(subscription.polarSubscriptionId)
+
+    const now = new Date()
+    await db
+      .update(subscriptions)
+      .set({ cancelAtPeriodEnd: true, updatedAt: now })
+      .where(eq(subscriptions.id, subscription.id))
+
+    await this.auditService.writeSystem(
+      { workspaceId: context.workspaceId, tenantId: subscription.tenantId },
+      {
+        action: "billing.subscription.cancel_at_period_end",
+        resourceType: "subscription",
+        resourceId: subscription.id,
+        metadataJson: {
+          productKind: subscription.productKind,
+          moduleId: subscription.moduleId,
+          polarSubscriptionId: subscription.polarSubscriptionId,
+          actorUserId: context.userId,
+        },
+      }
+    )
+
+    return {
+      subscriptionId: subscription.id,
+      status: SubscriptionStatusSchema.parse(subscription.status),
+      cancelAtPeriodEnd: true,
+      currentPeriodEnd: subscription.currentPeriodEnd ?? null,
+    }
+  }
+
+  async resumeSubscription(
+    context: AuthContext,
+    subscriptionId: string
+  ): Promise<CancelSubscriptionResponse> {
+    const rows = await db
+      .select()
+      .from(subscriptions)
+      .where(
+        and(
+          eq(subscriptions.id, subscriptionId),
+          eq(subscriptions.workspaceId, context.workspaceId)
+        )
+      )
+      .limit(1)
+
+    const subscription = rows[0]
+    if (!subscription) {
+      throw new NotFoundException("Subscription not found")
+    }
+    if (!subscription.polarSubscriptionId) {
+      throw new BadRequestException(
+        "Subscription is not linked to a Polar subscription"
+      )
+    }
+    if (!subscription.cancelAtPeriodEnd) {
+      throw new BadRequestException(
+        "Subscription is not scheduled for cancellation"
+      )
+    }
+
+    await this.polarService.resumeSubscription(subscription.polarSubscriptionId)
+
+    const now = new Date()
+    await db
+      .update(subscriptions)
+      .set({ cancelAtPeriodEnd: false, updatedAt: now })
+      .where(eq(subscriptions.id, subscription.id))
+
+    await this.auditService.writeSystem(
+      { workspaceId: context.workspaceId, tenantId: subscription.tenantId },
+      {
+        action: "billing.subscription.resume",
+        resourceType: "subscription",
+        resourceId: subscription.id,
+        metadataJson: {
+          productKind: subscription.productKind,
+          moduleId: subscription.moduleId,
+          polarSubscriptionId: subscription.polarSubscriptionId,
+          actorUserId: context.userId,
+        },
+      }
+    )
+
+    return {
+      subscriptionId: subscription.id,
+      status: SubscriptionStatusSchema.parse(subscription.status),
+      cancelAtPeriodEnd: false,
+      currentPeriodEnd: subscription.currentPeriodEnd ?? null,
+    }
+  }
+
+  /**
+   * Switch the workspace's active plan to a different Polar product. Used
+   * when the user upgrades/downgrades between paid tiers — calling Polar's
+   * `subscriptions.update` (vs. creating a new checkout) keeps a single
+   * subscription per workspace and lets Polar handle proration on its side.
+   * `subscribe` (starter → first paid tier) still goes through checkout
+   * because there's no subscription to update yet.
+   */
+  async changePlan(
+    context: AuthContext,
+    newProductId: string
+  ): Promise<{ subscriptionId: string; polarSubscriptionId: string }> {
+    const catalog = await this.polarService.listCatalog()
+    const target = catalog.find((entry) => entry.productId === newProductId)
+    if (!target) {
+      throw new NotFoundException("Product not found in catalog")
+    }
+    if (target.kind !== "plan") {
+      throw new BadRequestException("Product is not a plan")
+    }
+
+    const rows = await db
+      .select()
+      .from(subscriptions)
+      .where(
+        and(
+          eq(subscriptions.workspaceId, context.workspaceId),
+          eq(subscriptions.productKind, "plan")
+        )
+      )
+
+    const active = rows.find(
+      (row) =>
+        row.status !== "canceled" &&
+        row.status !== "incomplete" &&
+        Boolean(row.polarSubscriptionId)
+    )
+    if (!active?.polarSubscriptionId) {
+      throw new BadRequestException(
+        "No active plan subscription to change. Use checkout to subscribe."
+      )
+    }
+    if (active.polarProductId === newProductId) {
+      throw new BadRequestException("Workspace is already on this plan")
+    }
+
+    if (active.cancelAtPeriodEnd) {
+      await this.polarService.resumeSubscription(active.polarSubscriptionId)
+    }
+    await this.polarService.changeSubscriptionProduct(
+      active.polarSubscriptionId,
+      newProductId
+    )
+
+    // Optimistically apply the new product/plan to the DB and entitlements so
+    // the UI reflects the change immediately (a follow-up `subscription.updated`
+    // webhook will re-assert the same state — idempotent).
+    const now = new Date()
+    await db
+      .update(subscriptions)
+      .set({
+        polarProductId: newProductId,
+        plan: target.plan ?? active.plan,
+        cancelAtPeriodEnd: false,
+        updatedAt: now,
+      })
+      .where(eq(subscriptions.id, active.id))
+
+    if (target.plan && target.plan !== active.plan) {
+      await this.applyPlan(
+        { workspaceId: context.workspaceId, tenantId: active.tenantId },
+        target.plan
+      )
+    }
+
+    await this.auditService.writeSystem(
+      { workspaceId: context.workspaceId, tenantId: active.tenantId },
+      {
+        action: "billing.subscription.change_plan",
+        resourceType: "subscription",
+        resourceId: active.id,
+        metadataJson: {
+          fromProductId: active.polarProductId,
+          toProductId: newProductId,
+          polarSubscriptionId: active.polarSubscriptionId,
+          actorUserId: context.userId,
+        },
+      }
+    )
+
+    return {
+      subscriptionId: active.id,
+      polarSubscriptionId: active.polarSubscriptionId,
+    }
   }
 
   async createPortal(authContext: AuthContext): Promise<{ url: string }> {
@@ -434,14 +900,20 @@ export class BillingService {
             targetWhere: sql`${subscriptions.productKind} = 'module'`,
           }
 
+    // A canceled slot is dead — let any new subscription take it over even
+    // if its `polarCreatedAt` doesn't strictly beat the dead row's. Without
+    // this, the cancel-now → resubscribe path silently drops the new sub when
+    // timestamps don't increase as expected.
     const setWhere = polarCreatedAt
       ? sql`
           ${subscriptions.polarSubscriptionId} = ${polar.id}
+          OR ${subscriptions.status} = 'canceled'
           OR ${subscriptions.polarCreatedAt} IS NULL
           OR (${polarCreatedAt}::timestamptz) >= ${subscriptions.polarCreatedAt}
         `
       : sql`
           ${subscriptions.polarSubscriptionId} = ${polar.id}
+          OR ${subscriptions.status} = 'canceled'
           OR ${subscriptions.polarCreatedAt} IS NULL
           OR TRUE
         `
@@ -566,22 +1038,49 @@ export class BillingService {
       .from(subscriptions)
       .where(eq(subscriptions.workspaceId, workspaceId))
 
-    return rows.map((row) => ({
-      id: row.id,
-      tenantId: row.tenantId,
-      workspaceId: row.workspaceId,
-      polarCustomerId: row.polarCustomerId,
-      polarSubscriptionId: row.polarSubscriptionId,
-      polarProductId: row.polarProductId,
-      productKind: row.productKind === "module" ? "module" : "plan",
-      moduleId: row.moduleId,
-      plan:
-        row.plan === "pro" || row.plan === "enterprise" ? row.plan : "starter",
-      // row.status is already an internal SubscriptionStatus (mapped on write);
-      // validate it back out rather than re-running the Polar mapping.
-      status: SubscriptionStatusSchema.catch("incomplete").parse(row.status),
-      currentPeriodEnd: row.currentPeriodEnd,
-      cancelAtPeriodEnd: row.cancelAtPeriodEnd,
-    }))
+    const amountsByPolarSubId = new Map<
+      string,
+      Awaited<ReturnType<typeof this.polarService.getLatestSubscriptionAmounts>>
+    >()
+    const polarIds = rows
+      .map((row) => row.polarSubscriptionId)
+      .filter((id): id is string => Boolean(id))
+    await Promise.all(
+      polarIds.map(async (id) => {
+        amountsByPolarSubId.set(
+          id,
+          await this.polarService.getLatestSubscriptionAmounts(id)
+        )
+      })
+    )
+
+    return rows.map((row) => {
+      const amounts = row.polarSubscriptionId
+        ? amountsByPolarSubId.get(row.polarSubscriptionId)
+        : null
+      return {
+        id: row.id,
+        tenantId: row.tenantId,
+        workspaceId: row.workspaceId,
+        polarCustomerId: row.polarCustomerId,
+        polarSubscriptionId: row.polarSubscriptionId,
+        polarProductId: row.polarProductId,
+        productKind: row.productKind === "module" ? "module" : "plan",
+        moduleId: row.moduleId,
+        plan:
+          row.plan === "pro" || row.plan === "enterprise"
+            ? row.plan
+            : "starter",
+        // row.status is already an internal SubscriptionStatus (mapped on write);
+        // validate it back out rather than re-running the Polar mapping.
+        status: SubscriptionStatusSchema.catch("incomplete").parse(row.status),
+        currentPeriodEnd: row.currentPeriodEnd,
+        cancelAtPeriodEnd: row.cancelAtPeriodEnd,
+        subtotalUsdCents: amounts?.subtotalCents ?? null,
+        taxUsdCents: amounts?.taxCents ?? null,
+        totalUsdCents: amounts?.totalCents ?? null,
+        currency: amounts?.currency ?? null,
+      }
+    })
   }
 }

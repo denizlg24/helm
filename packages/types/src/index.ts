@@ -288,6 +288,15 @@ export const SubscriptionSchema = z.object({
   status: SubscriptionStatusSchema,
   currentPeriodEnd: z.coerce.date().nullable().optional(),
   cancelAtPeriodEnd: z.boolean(),
+  // Live amounts fetched from Polar at read time. `subtotalUsdCents` is the
+  // recurring price excl. tax; `taxUsdCents` is the tax Polar computed for
+  // this workspace's billing address; `totalUsdCents` is what actually gets
+  // charged. All optional/nullable — tax is unknown until Polar has an
+  // address on file or has emitted at least one invoice.
+  subtotalUsdCents: z.number().int().nullable().optional(),
+  taxUsdCents: z.number().int().nullable().optional(),
+  totalUsdCents: z.number().int().nullable().optional(),
+  currency: z.string().nullable().optional(),
 })
 
 export const PolarProductKindSchema = z.enum(["plan", "credits", "module"])
@@ -321,6 +330,44 @@ export const ActiveCheckoutSessionSchema = z.object({
 
 export const CustomerPortalResponseSchema = z.object({
   url: z.string().url(),
+})
+
+// Status of a Polar checkout, used by the post-checkout callback page in the
+// console to render success / pending / failure feedback without waiting for
+// the webhook → summary cycle.
+export const CheckoutStatusSchema = z.enum([
+  "open",
+  "expired",
+  "confirmed",
+  "succeeded",
+  "failed",
+])
+
+export const CheckoutStatusResponseSchema = z.object({
+  checkoutId: z.string().min(1),
+  status: CheckoutStatusSchema,
+  productId: z.string().min(1).nullable(),
+  productName: z.string().nullable(),
+  url: z.string().url().nullable(),
+})
+
+export const CancelSubscriptionResponseSchema = z.object({
+  subscriptionId: z.string().min(1),
+  status: SubscriptionStatusSchema,
+  cancelAtPeriodEnd: z.boolean(),
+  currentPeriodEnd: z.coerce.date().nullable(),
+})
+
+// Switch the workspace's active plan to a different Polar product. Used for
+// paid → paid tier moves; subscribing from the free Starter tier goes through
+// the regular checkout flow because there's no existing subscription yet.
+export const ChangePlanInputSchema = z.object({
+  productId: z.string().min(1),
+})
+
+export const ChangePlanResponseSchema = z.object({
+  subscriptionId: z.string().min(1),
+  polarSubscriptionId: z.string().min(1),
 })
 
 // One entry per Polar product available for purchase, resolved from product
@@ -720,6 +767,15 @@ export type CheckoutSessionResponse = z.infer<
 export type CustomerPortalResponse = z.infer<
   typeof CustomerPortalResponseSchema
 >
+export type CheckoutStatus = z.infer<typeof CheckoutStatusSchema>
+export type CheckoutStatusResponse = z.infer<
+  typeof CheckoutStatusResponseSchema
+>
+export type CancelSubscriptionResponse = z.infer<
+  typeof CancelSubscriptionResponseSchema
+>
+export type ChangePlanInput = z.infer<typeof ChangePlanInputSchema>
+export type ChangePlanResponse = z.infer<typeof ChangePlanResponseSchema>
 export type BillingSummaryResponse = z.infer<
   typeof BillingSummaryResponseSchema
 >
