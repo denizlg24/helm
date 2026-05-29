@@ -12,6 +12,8 @@ import {
   ChangePlanInputSchema,
   type CheckoutInput,
   CheckoutInputSchema,
+  CheckoutIdParamSchema,
+  SubscriptionIdParamSchema,
 } from "@workspace/types"
 import {
   CurrentAuthContext,
@@ -73,9 +75,10 @@ export class BillingController {
     @CurrentAuthContext() authContext: AuthContext,
     @Param("checkoutId") checkoutId: string
   ) {
+    const validated = CheckoutIdParamSchema.parse({ checkoutId })
     return this.billingService.getCheckoutStatus(
       authContext.workspaceId,
-      checkoutId
+      validated.checkoutId
     )
   }
 
@@ -95,7 +98,11 @@ export class BillingController {
     @CurrentAuthContext() authContext: AuthContext,
     @Param("subscriptionId") subscriptionId: string
   ) {
-    return this.billingService.resumeSubscription(authContext, subscriptionId)
+    const validated = SubscriptionIdParamSchema.parse({ subscriptionId })
+    return this.billingService.resumeSubscription(
+      authContext,
+      validated.subscriptionId
+    )
   }
 
   @Post("subscriptions/:subscriptionId/cancel")
@@ -104,6 +111,10 @@ export class BillingController {
     @CurrentAuthContext() authContext: AuthContext,
     @Param("subscriptionId") subscriptionId: string
   ) {
-    return this.billingService.cancelSubscription(authContext, subscriptionId)
+    const validated = SubscriptionIdParamSchema.parse({ subscriptionId })
+    return this.billingService.cancelSubscription(
+      authContext,
+      validated.subscriptionId
+    )
   }
 }

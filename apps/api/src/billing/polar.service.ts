@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException } from "@nestjs/common"
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  type OnModuleDestroy,
+  type OnModuleInit,
+} from "@nestjs/common"
 import { Polar } from "@polar-sh/sdk"
 import type {
   BillingCatalogEntry,
@@ -32,11 +38,31 @@ const CACHE_TTL_MS = {
 } as const
 
 @Injectable()
-export class PolarService {
+export class PolarService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PolarService.name)
   private client: Polar | null = null
   private config: BillingEnv | null = null
   private readonly cache = new Map<string, CacheEntry<unknown>>()
+  private cleanupTimer: NodeJS.Timeout | null = null
+
+  onModuleInit(): void {
+    // Clean up expired cache entries every 60 seconds to prevent unbounded growth.
+    this.cleanupTimer = setInterval(() => {
+      const now = Date.now()
+      for (const [key, entry] of this.cache.entries()) {
+        if (entry.expiresAt <= now) {
+          this.cache.delete(key)
+        }
+      }
+    }, 60_000)
+  }
+
+  onModuleDestroy(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer)
+      this.cleanupTimer = null
+    }
+  }
 
   private cacheGet<T>(key: string): T | undefined {
     const entry = this.cache.get(key) as CacheEntry<T> | undefined
@@ -194,6 +220,9 @@ export class PolarService {
       case "failed":
         return status
       default:
+        this.logger.warn(
+          `Unknown checkout status from Polar: ${JSON.stringify(status)}`
+        )
         return "open"
     }
   }
@@ -359,28 +388,33 @@ export class PolarService {
     if (cached !== undefined) return cached
 
     try {
-      const pages = await this.getClient().orders.list({
+      const pages = this.getClient().orders.list({
         subscriptionId: polarSubscriptionId,
         sorting: ["-created_at"],
         limit: 1,
       })
-      for await (const page of pages) {
-        const order = page.result.items[0]
-        if (!order) {
-          this.cacheSet(cacheKey, null, CACHE_TTL_MS.subscriptionAmounts)
-          return null
-        }
-        const value = {
-          subtotalCents: order.subtotalAmount,
-          taxCents: order.taxAmount,
-          totalCents: order.totalAmount,
-          currency: order.currency,
-        }
-        this.cacheSet(cacheKey, value, CACHE_TTL_MS.subscriptionAmounts)
-        return value
+      const iterator = pages[Symbol.asyncIterator]()
+      const firstPage = await iterator.next()
+
+      if (firstPage.done || !firstPage.value) {
+        this.cacheSet(cacheKey, null, CACHE_TTL_MS.subscriptionAmounts)
+        return null
       }
-      this.cacheSet(cacheKey, null, CACHE_TTL_MS.subscriptionAmounts)
-      return null
+
+      const order = firstPage.value.result.items[0]
+      if (!order) {
+        this.cacheSet(cacheKey, null, CACHE_TTL_MS.subscriptionAmounts)
+        return null
+      }
+
+      const value = {
+        subtotalCents: order.subtotalAmount,
+        taxCents: order.taxAmount,
+        totalCents: order.totalAmount,
+        currency: order.currency,
+      }
+      this.cacheSet(cacheKey, value, CACHE_TTL_MS.subscriptionAmounts)
+      return value
     } catch (error) {
       this.logger.warn(
         `Failed to fetch latest order for subscription ${polarSubscriptionId}: ${String(error)}`

@@ -365,6 +365,14 @@ export const ChangePlanInputSchema = z.object({
   productId: z.string().min(1),
 })
 
+export const CheckoutIdParamSchema = z.object({
+  checkoutId: z.string().min(1),
+})
+
+export const SubscriptionIdParamSchema = z.object({
+  subscriptionId: z.string().min(1),
+})
+
 export const ChangePlanResponseSchema = z.object({
   subscriptionId: z.string().min(1),
   polarSubscriptionId: z.string().min(1),

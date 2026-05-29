@@ -1058,6 +1058,19 @@ export class BillingService {
       const amounts = row.polarSubscriptionId
         ? amountsByPolarSubId.get(row.polarSubscriptionId)
         : null
+
+      // Validate the DB status; log if invalid and fall back to "incomplete".
+      const statusParsed = SubscriptionStatusSchema.safeParse(row.status)
+      let status: SubscriptionStatus
+      if (statusParsed.success) {
+        status = statusParsed.data
+      } else {
+        this.logger.warn(
+          `Invalid subscription status in DB: row ${row.id}, status=${row.status}`
+        )
+        status = "incomplete"
+      }
+
       return {
         id: row.id,
         tenantId: row.tenantId,
@@ -1071,9 +1084,7 @@ export class BillingService {
           row.plan === "pro" || row.plan === "enterprise"
             ? row.plan
             : "starter",
-        // row.status is already an internal SubscriptionStatus (mapped on write);
-        // validate it back out rather than re-running the Polar mapping.
-        status: SubscriptionStatusSchema.catch("incomplete").parse(row.status),
+        status,
         currentPeriodEnd: row.currentPeriodEnd,
         cancelAtPeriodEnd: row.cancelAtPeriodEnd,
         subtotalUsdCents: amounts?.subtotalCents ?? null,
