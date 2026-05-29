@@ -388,7 +388,7 @@ export class PolarService implements OnModuleInit, OnModuleDestroy {
     if (cached !== undefined) return cached
 
     try {
-      const pages = this.getClient().orders.list({
+      const pages = await this.getClient().orders.list({
         subscriptionId: polarSubscriptionId,
         sorting: ["-created_at"],
         limit: 1,
