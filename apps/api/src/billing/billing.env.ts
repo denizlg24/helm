@@ -15,7 +15,9 @@ export const BillingEnvSchema = z.object({
     z
       .string()
       .url()
-      .default("http://localhost:3002/billing/success?checkout={CHECKOUT_ID}")
+      .default(
+        "http://localhost:3002/checkout/return?checkout_id={CHECKOUT_ID}"
+      )
   ),
   POLAR_PORTAL_RETURN_URL: z.preprocess(
     emptyToUndefined,

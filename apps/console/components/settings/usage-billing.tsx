@@ -126,7 +126,11 @@ export function UsageBillingSection() {
   const handleTopUp = useCallback(async (productId: string) => {
     setPendingProductId(productId)
     try {
-      const session = await apiClient.billing.checkout({ productId })
+      const successUrl = `${window.location.origin}/checkout/return?checkout_id={CHECKOUT_ID}&from=usage&product=credits`
+      const session = await apiClient.billing.checkout({
+        productId,
+        successUrl,
+      })
       window.location.href = session.url
     } catch (checkoutError) {
       const message =
