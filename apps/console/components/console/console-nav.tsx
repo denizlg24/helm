@@ -8,6 +8,7 @@ import {
   KeyRoundIcon,
   LaptopIcon,
   MonitorDownIcon,
+  SettingsIcon,
   WalletIcon,
 } from "lucide-react"
 import Link from "next/link"
@@ -63,6 +64,12 @@ export const consoleNavItems: readonly ConsoleNavItem[] = [
     label: "API tokens",
     description: "Personal access tokens for scripts and integrations.",
     icon: KeyRoundIcon,
+  },
+  {
+    href: "/settings",
+    label: "Settings",
+    description: "Appearance and console preferences.",
+    icon: SettingsIcon,
   },
 ]
 

@@ -25,6 +25,7 @@ const generatedConfigPath = join(
 )
 
 const ALLOWED_THEMES = new Set([
+  "default",
   "rose",
   "coral",
   "blush",

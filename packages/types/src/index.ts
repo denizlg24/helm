@@ -904,10 +904,13 @@ export type FileRef = z.infer<typeof FileRefSchema>
 
 // --- Desktop installer builds ---------------------------------------------
 
-// The 10 first-run themes that can be baked into a custom desktop shell. Must
-// stay in sync with the themes in packages/ui/src/styles/themes and the
-// ALLOWED_THEMES set in scripts/desktop-custom-build.ts.
+// The themes that can be baked into a custom desktop shell. Must stay in sync
+// with the themes in packages/ui/src/styles/themes and the ALLOWED_THEMES set
+// in scripts/desktop-custom-build.ts. "default" is the console's own look (the
+// unscoped :root theme in globals.css); it has no [data-theme] override, so the
+// app falls through to :root when it is selected.
 export const DesktopThemeSchema = z.enum([
+  "default",
   "rose",
   "coral",
   "blush",

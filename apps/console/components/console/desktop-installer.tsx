@@ -27,6 +27,7 @@ import {
   TriangleAlertIcon,
 } from "lucide-react"
 import Link from "next/link"
+import { useTheme } from "next-themes"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { apiClient } from "../../lib/api-client"
 
@@ -278,6 +279,8 @@ function ThemePicker({
   value: DesktopTheme
   onChange: (theme: DesktopTheme) => void
 }) {
+  const { resolvedTheme } = useTheme()
+  const dark = resolvedTheme === "dark"
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
       {THEMES.map((option) => {
@@ -295,7 +298,7 @@ function ThemePicker({
             onClick={() => onChange(option)}
             type="button"
           >
-            <ThemePreview theme={option} />
+            <ThemePreview dark={dark} theme={option} />
             <div className="flex items-center justify-between px-0.5">
               <span className="font-medium text-foreground text-xs">
                 {capitalize(option)}
@@ -313,13 +316,17 @@ function ThemePicker({
 
 // A miniature, non-interactive mock of the dashboard home (sidebar + header +
 // chat surface) rendered under the theme's `data-theme` scope so each card
-// shows the actual colors the generated app ships with. No `.dark` class is
-// applied, so previews always show the theme's light variant regardless of the
-// console's current mode.
-function ThemePreview({ theme }: { theme: DesktopTheme }) {
+// shows the actual colors the generated app ships with. The `dark` class
+// mirrors the console's current mode so every preview (including "default",
+// which has no [data-theme] override and falls through to :root) renders the
+// same light/dark variant consistently.
+function ThemePreview({ theme, dark }: { theme: DesktopTheme; dark: boolean }) {
   return (
     <div
-      className="pointer-events-none flex h-24 overflow-hidden rounded-md border border-border bg-background"
+      className={cn(
+        "pointer-events-none flex h-24 overflow-hidden rounded-md border border-border bg-background",
+        dark && "dark"
+      )}
       data-theme={theme}
     >
       <div className="flex w-1/4 flex-col gap-1.5 border-border border-r bg-sidebar p-1.5">
