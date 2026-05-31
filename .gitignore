@@ -43,3 +43,4 @@ apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/gen/schemas/
 
 *.tsbuildinfo
+desktop-upload-manifest.json

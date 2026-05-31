@@ -425,6 +425,51 @@ export const devices = pgTable(
   ]
 )
 
+export const desktopBuilds = pgTable(
+  "desktop_builds",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("queued"),
+    appName: text("app_name").notNull(),
+    identifier: text("identifier"),
+    theme: text("theme").notNull(),
+    features: jsonb("features").$type<string[]>().notNull().default([]),
+    artifactsJson: jsonb("artifacts_json")
+      .$type<
+        Array<{
+          platform: string
+          filename: string
+          downloadUrl: string
+          sizeBytes: number
+        }>
+      >()
+      .notNull()
+      .default([]),
+    // Per-build secret the CI workflow must echo back to authorize its result
+    // callback. Never returned to clients.
+    callbackToken: text("callback_token").notNull(),
+    error: text("error"),
+    ...timestamps,
+  },
+  (table) => [
+    index("desktop_builds_tenant_id_idx").on(table.tenantId),
+    index("desktop_builds_workspace_id_idx").on(table.workspaceId),
+    index("desktop_builds_workspace_created_idx").on(
+      table.workspaceId,
+      table.createdAt
+    ),
+  ]
+)
+
 export const auditLog = pgTable(
   "audit_log",
   {

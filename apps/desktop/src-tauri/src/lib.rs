@@ -1,10 +1,11 @@
 use keyring::Entry;
 use serde::Serialize;
 use std::fs;
+use std::io::Read;
 
 const KEYRING_SERVICE: &str = "com.helm.desktop";
-const MAX_FILE_SIZE_BYTES: u64 = 100 * 1024 * 1024; // 100 MB
-const MAX_TOTAL_SELECTION_BYTES: u64 = 50 * 1024 * 1024; // 50 MB
+const MAX_FILE_SIZE_BYTES: u64 = 50 * 1024 * 1024; // 50 MB
+const MAX_TOTAL_SELECTION_BYTES: u64 = 100 * 1024 * 1024; // 100 MB
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -78,8 +79,33 @@ fn select_files() -> Result<Vec<SelectedFile>, String> {
             ));
         }
 
-        let bytes = fs::read(&path).map_err(|error| error.to_string())?;
-        total_bytes_read += file_size;
+        let remaining_total = MAX_TOTAL_SELECTION_BYTES.saturating_sub(total_bytes_read);
+        let read_limit = MAX_FILE_SIZE_BYTES.min(remaining_total);
+        let mut file = fs::File::open(&path).map_err(|error| error.to_string())?;
+        let mut bytes = Vec::new();
+        file.by_ref()
+            .take(read_limit + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|error| error.to_string())?;
+        let bytes_read = u64::try_from(bytes.len()).map_err(|error| error.to_string())?;
+
+        if bytes_read > MAX_FILE_SIZE_BYTES {
+            return Err(format!(
+                "File '{}' exceeds maximum size of {} MB",
+                name,
+                MAX_FILE_SIZE_BYTES / (1024 * 1024)
+            ));
+        }
+
+        if total_bytes_read + bytes_read > MAX_TOTAL_SELECTION_BYTES {
+            return Err(format!(
+                "Total selection size would exceed maximum of {} MB (file '{}' cannot be added)",
+                MAX_TOTAL_SELECTION_BYTES / (1024 * 1024),
+                name
+            ));
+        }
+
+        total_bytes_read += bytes_read;
 
         result.push(SelectedFile {
             name,

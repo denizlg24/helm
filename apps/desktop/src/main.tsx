@@ -3,6 +3,11 @@ import ReactDOM from "react-dom/client"
 import "@workspace/ui/globals.css"
 import { openUrl } from "@tauri-apps/plugin-opener"
 import { App } from "./App"
+import { featureBuildInfo } from "./lib/features"
+
+const buildInfo = featureBuildInfo()
+document.documentElement.dataset.theme = buildInfo.theme
+document.title = buildInfo.appName
 
 function disableMenu() {
   if (window.location.hostname !== "tauri.localhost") {

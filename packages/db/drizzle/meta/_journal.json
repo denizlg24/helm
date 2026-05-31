@@ -85,6 +85,13 @@
       "when": 1779983925111,
       "tag": "0011_bizarre_toxin",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1780257982030,
+      "tag": "0012_harsh_forge",
+      "breakpoints": true
     }
   ]
 }
