@@ -32,6 +32,12 @@ export function createFeatureGatedImporter<
   }
 }
 
+function isEntry<T>(
+  entry: readonly [string, T] | null
+): entry is readonly [string, T] {
+  return entry !== null
+}
+
 export async function featureGatedImports<
   TModuleByFeature extends Record<string, unknown>,
 >(
@@ -48,6 +54,6 @@ export async function featureGatedImports<
   )
 
   return Object.fromEntries(
-    entries.filter((entry) => entry !== null)
+    entries.filter(isEntry)
   ) as Partial<TModuleByFeature>
 }

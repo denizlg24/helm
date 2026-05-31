@@ -91,7 +91,17 @@ function requireSafeIdentifier(input: string): string {
 }
 
 async function collectIconFiles(iconDir: string, buildId: string) {
+  // Path traversal check: ensure iconDir is relative and doesn't escape repo root
+  if (/^[/\\]/.test(iconDir) || /^[A-Za-z]:/.test(iconDir)) {
+    throw new Error("HELM_CUSTOM_ICON_DIR escapes repository root")
+  }
+
   const source = resolve(repoRoot, iconDir)
+  const relativeToRoot = relative(repoRoot, source)
+  if (relativeToRoot.startsWith("..")) {
+    throw new Error("HELM_CUSTOM_ICON_DIR escapes repository root")
+  }
+
   const sourceStat = await stat(source)
   if (!sourceStat.isDirectory()) {
     throw new Error(`HELM_CUSTOM_ICON_DIR is not a directory: ${iconDir}`)

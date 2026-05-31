@@ -14,7 +14,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { authClient } from "../../lib/auth-client"
-import { ConsoleNavList, consoleNavItems } from "./console-nav"
+import { ConsoleNavList, consoleNavItems, isActive } from "./console-nav"
 
 interface ConsoleShellProps {
   children: React.ReactNode
@@ -41,11 +41,7 @@ export function ConsoleShell({ children }: ConsoleShellProps) {
   }
 
   const activeItem =
-    consoleNavItems.find((item) =>
-      item.href === "/"
-        ? pathname === "/"
-        : pathname === item.href || pathname?.startsWith(`${item.href}/`)
-    ) ?? null
+    consoleNavItems.find((item) => isActive(pathname, item.href)) ?? null
 
   const handleSignOut = async () => {
     await authClient.signOut()

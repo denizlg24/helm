@@ -104,9 +104,12 @@ class DenizCloudClient {
     const size = fileStat.size
     const filename = basename(filePath)
     const uploadId = await this.createUploadSession(folder.path, filename, size)
-    if (uploadId) {
-      await this.patchUpload(uploadId, filePath)
+    if (uploadId === null) {
+      throw new Error(
+        "Failed to create upload session: received null uploadId (possible 409 conflict)"
+      )
     }
+    await this.patchUpload(uploadId, filePath)
     const id = await this.findFileIdByName(folder.id, filename)
     if (!id) {
       throw new Error(
@@ -161,6 +164,40 @@ class DenizCloudClient {
     const body = await openAsBlob(filePath)
 
     for (let attempt = 1; attempt <= PATCH_UPLOAD_RETRY_COUNT; attempt += 1) {
+      // Fetch the current server offset before each retry attempt
+      let uploadOffset = "0"
+      if (attempt > 1) {
+        try {
+          const headResponse = await fetch(url, {
+            method: "HEAD",
+            headers: {
+              ...this.authHeaders(),
+              "Tus-Resumable": TUS_VERSION,
+            },
+          })
+          if (!headResponse.ok) {
+            throw new Error(
+              `HEAD request failed: ${headResponse.status} ${headResponse.statusText}`
+            )
+          }
+          const serverOffset = headResponse.headers.get("Upload-Offset")
+          if (serverOffset) {
+            uploadOffset = serverOffset
+          }
+        } catch (error) {
+          if (attempt === PATCH_UPLOAD_RETRY_COUNT) {
+            throw error
+          }
+          console.warn(
+            `Upload HEAD errored on attempt ${attempt}; retrying: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          )
+          await delay(1000 * attempt)
+          continue
+        }
+      }
+
       let response: Response
       try {
         response = await fetch(url, {
@@ -169,7 +206,7 @@ class DenizCloudClient {
             ...this.authHeaders(),
             "Content-Type": "application/offset+octet-stream",
             "Tus-Resumable": TUS_VERSION,
-            "Upload-Offset": "0",
+            "Upload-Offset": uploadOffset,
           },
           body,
           signal: AbortSignal.timeout(PATCH_UPLOAD_TIMEOUT_MS),

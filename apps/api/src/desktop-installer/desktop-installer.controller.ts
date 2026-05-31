@@ -61,6 +61,13 @@ export class DesktopInstallerController {
     @Body() body: unknown
   ) {
     const input = DesktopBuildCallbackInputSchema.parse(body)
-    return this.desktopInstallerService.applyCallback(id, token ?? "", input)
+    // First, query the build to get its workspaceId for workspace isolation in the transaction
+    const build = await this.desktopInstallerService.getBuildWorkspaceId(id)
+    return this.desktopInstallerService.applyCallback(
+      id,
+      token ?? "",
+      input,
+      build.workspaceId
+    )
   }
 }

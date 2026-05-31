@@ -15,10 +15,7 @@ export function areFeaturesEnabled(features: readonly FeatureId[]): boolean {
 }
 
 export function isAnyFeatureEnabled(features: readonly FeatureId[]): boolean {
-  return (
-    isFullFeatureBuild ||
-    features.some((feature) => enabledFeatureSet.has(feature))
-  )
+  return features.some((f) => isFeatureEnabled(f))
 }
 
 export function filterEnabledFeatures<T extends { id: FeatureId }>(

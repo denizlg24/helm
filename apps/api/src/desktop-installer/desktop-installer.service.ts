@@ -58,6 +58,19 @@ export class DesktopInstallerService {
     return toDesktopBuild(row)
   }
 
+  async getBuildWorkspaceId(buildId: string): Promise<{ workspaceId: string }> {
+    const [row] = await db
+      .select({ workspaceId: desktopBuilds.workspaceId })
+      .from(desktopBuilds)
+      .where(eq(desktopBuilds.id, buildId))
+      .limit(1)
+
+    if (!row) {
+      throw new NotFoundException("Build not found")
+    }
+    return row
+  }
+
   async create(
     authContext: AuthContext,
     input: CreateDesktopBuildInput
@@ -113,16 +126,25 @@ export class DesktopInstallerService {
       .where(eq(desktopBuilds.id, id))
       .returning()
 
-    await this.auditService.write(authContext, {
-      action: "desktop_installer.build.created",
-      resourceType: "desktop_build",
-      resourceId: id,
-      metadataJson: {
+    try {
+      await this.auditService.write(authContext, {
+        action: "desktop_installer.build.created",
+        resourceType: "desktop_build",
+        resourceId: id,
+        metadataJson: {
+          appName: input.appName,
+          theme: input.theme,
+          features: input.features,
+        },
+      })
+    } catch (error) {
+      console.error("Failed to write audit log for desktop build", {
+        error,
+        buildId: id,
+        authContext,
         appName: input.appName,
-        theme: input.theme,
-        features: input.features,
-      },
-    })
+      })
+    }
 
     return toDesktopBuild(building ?? row)
   }
@@ -130,7 +152,8 @@ export class DesktopInstallerService {
   async applyCallback(
     buildId: string,
     token: string,
-    input: DesktopBuildCallbackInput
+    input: DesktopBuildCallbackInput,
+    workspaceId: string
   ): Promise<{ received: true }> {
     // Wrapped in a transaction with a row lock so concurrent per-platform
     // callbacks (one per matrix OS) can't read-merge-write over each other and
@@ -139,7 +162,12 @@ export class DesktopInstallerService {
       const [row] = await tx
         .select()
         .from(desktopBuilds)
-        .where(eq(desktopBuilds.id, buildId))
+        .where(
+          and(
+            eq(desktopBuilds.id, buildId),
+            eq(desktopBuilds.workspaceId, workspaceId)
+          )
+        )
         .limit(1)
         .for("update")
 
@@ -156,16 +184,25 @@ export class DesktopInstallerService {
         input.artifacts
       )
 
-      // A successful platform callback marks the build ready and never
-      // downgrades an already-ready build. A failure only fails the build if
-      // nothing has been produced yet.
+      // A build is ready only when ALL matrix platforms have completed
+      // successfully. Track which platforms have reported back.
+      const reportedPlatforms = new Set(
+        mergedArtifacts.map((artifact) => artifact.platform)
+      )
+      const expectedPlatforms: string[] = ["linux", "windows", "macos"]
+      const allPlatformsCompleted = expectedPlatforms.every((platform) =>
+        reportedPlatforms.has(platform)
+      )
+
       const hasArtifacts = mergedArtifacts.length > 0
       const nextStatus =
-        input.status === "ready" || hasArtifacts
+        allPlatformsCompleted && hasArtifacts
           ? "ready"
           : row.status === "ready"
             ? "ready"
-            : "failed"
+            : input.status === "failed" && !hasArtifacts
+              ? "failed"
+              : row.status
 
       await tx
         .update(desktopBuilds)
@@ -173,12 +210,19 @@ export class DesktopInstallerService {
           status: nextStatus,
           artifactsJson: mergedArtifacts,
           error:
-            input.status === "failed" && !hasArtifacts
-              ? (input.error ?? `Build failed on ${input.platform}`)
-              : row.error,
+            nextStatus === "ready"
+              ? null
+              : input.status === "failed" && !hasArtifacts
+                ? (input.error ?? `Build failed on ${input.platform}`)
+                : row.error,
           updatedAt: new Date(),
         })
-        .where(eq(desktopBuilds.id, buildId))
+        .where(
+          and(
+            eq(desktopBuilds.id, buildId),
+            eq(desktopBuilds.workspaceId, workspaceId)
+          )
+        )
 
       return { received: true }
     })
@@ -231,30 +275,46 @@ export class DesktopInstallerService {
       features: row.features.join(","),
       upload_folder: `desktop-installers/${row.id}`,
       callback_url: callbackUrl,
-      callback_token: row.callbackToken,
     }
     if (row.identifier) {
       inputs.app_identifier = row.identifier
     }
 
-    const response = await fetch(
-      `https://api.github.com/repos/${config.GITHUB_INSTALLER_REPO}/actions/workflows/${config.GITHUB_INSTALLER_WORKFLOW}/dispatches`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${config.GITHUB_INSTALLER_TOKEN}`,
-          Accept: "application/vnd.github+json",
-          "X-GitHub-Api-Version": "2022-11-28",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ ref: config.GITHUB_INSTALLER_REF, inputs }),
-      }
-    )
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 10000)
 
-    // GitHub returns 204 No Content on a successful dispatch.
-    if (response.status !== 204) {
-      const detail = await response.text().catch(() => response.statusText)
-      throw new Error(`GitHub dispatch failed (${response.status}): ${detail}`)
+    try {
+      const response = await fetch(
+        `https://api.github.com/repos/${config.GITHUB_INSTALLER_REPO}/actions/workflows/${config.GITHUB_INSTALLER_WORKFLOW}/dispatches`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${config.GITHUB_INSTALLER_TOKEN}`,
+            Accept: "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ ref: config.GITHUB_INSTALLER_REF, inputs }),
+          signal: controller.signal,
+        }
+      )
+
+      // GitHub returns 204 No Content on a successful dispatch.
+      if (response.status !== 204) {
+        const detail = await response.text().catch(() => response.statusText)
+        throw new Error(
+          `GitHub dispatch failed (${response.status}): ${detail}`
+        )
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error(
+          "GitHub workflow dispatch timed out after 10 seconds. Please try again."
+        )
+      }
+      throw error
+    } finally {
+      clearTimeout(timeoutId)
     }
   }
 }

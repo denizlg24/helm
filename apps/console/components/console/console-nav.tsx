@@ -73,7 +73,7 @@ export const consoleNavItems: readonly ConsoleNavItem[] = [
   },
 ]
 
-const isActive = (pathname: string | null, href: string) => {
+export const isActive = (pathname: string | null, href: string) => {
   if (href === "/") {
     return pathname === "/"
   }
