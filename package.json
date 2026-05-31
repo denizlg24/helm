@@ -4,6 +4,9 @@
   "private": true,
   "scripts": {
     "build": "turbo build",
+    "desktop:build:custom": "bun scripts/desktop-custom-build.ts",
+    "desktop:upload:artifacts": "bun scripts/deniz-cloud-upload-artifacts.ts",
+    "desktop:report:result": "bun scripts/report-build-result.ts",
     "dev": "turbo dev",
     "lint": "turbo lint --cache=local:rw",
     "format": "turbo format",

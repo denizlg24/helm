@@ -468,7 +468,7 @@ export function BillingOverviewSection() {
                     No paid modules. Add some from{" "}
                     <Link
                       className="font-medium text-foreground underline-offset-4 hover:underline"
-                      href="/settings/modules"
+                      href="/modules"
                     >
                       Modules
                     </Link>
@@ -516,7 +516,7 @@ export function BillingOverviewSection() {
             Recurring charges only. AI credit top-ups appear under{" "}
             <Link
               className="font-medium text-foreground underline-offset-4 hover:underline"
-              href="/settings/usage"
+              href="/usage"
             >
               Usage
             </Link>
@@ -620,7 +620,7 @@ export function BillingOverviewSection() {
             <CardContent className="py-10 text-center text-muted-foreground text-sm">
               No paid modules. Enable more from{" "}
               <Link
-                href="/settings/modules"
+                href="/modules"
                 className="font-medium text-foreground underline-offset-4 hover:underline"
               >
                 Modules
@@ -694,7 +694,7 @@ export function BillingOverviewSection() {
           </p>
         </div>
         <Button asChild variant="outline">
-          <Link href="/settings/usage">
+          <Link href="/usage">
             View usage
             <ArrowUpRightIcon className="size-4" />
           </Link>

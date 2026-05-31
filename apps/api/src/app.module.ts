@@ -4,6 +4,7 @@ import { AuditModule } from "./audit/audit.module"
 import { HelmAuthModule } from "./auth/helm-auth.module"
 import { BillingModule } from "./billing/billing.module"
 import { DatabaseModule } from "./database/database.module"
+import { DesktopInstallerModule } from "./desktop-installer/desktop-installer.module"
 import { EntitlementModule } from "./entitlements/entitlement.module"
 import { LlmModule } from "./llm/llm.module"
 import { ModuleConfigModule } from "./module-configs/module-config.module"
@@ -28,6 +29,7 @@ import { WorkspaceModule } from "./workspaces/workspace.module"
     OnboardingModule,
     AssistantModule,
     StorageModule,
+    DesktopInstallerModule,
   ],
 })
 export class AppModule {}

@@ -7,6 +7,10 @@ import {
   createAssistantModule,
 } from "./modules/assistant"
 import { type BillingModule, createBillingModule } from "./modules/billing"
+import {
+  createDesktopInstallerModule,
+  type DesktopInstallerModule,
+} from "./modules/desktop-installer"
 import { createDevicesModule, type DevicesModule } from "./modules/devices"
 import { createFilesModule, type FilesModule } from "./modules/files"
 import {
@@ -35,6 +39,7 @@ export interface HelmApiClient {
   assistant: AssistantModule
   files: FilesModule
   usage: UsageModule
+  desktopInstaller: DesktopInstallerModule
 }
 
 export const createHelmApiClient = (
@@ -52,5 +57,6 @@ export const createHelmApiClient = (
     assistant: createAssistantModule(requestClient),
     files: createFilesModule(requestClient),
     usage: createUsageModule(requestClient),
+    desktopInstaller: createDesktopInstallerModule(requestClient),
   }
 }

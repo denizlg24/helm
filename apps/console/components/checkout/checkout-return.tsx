@@ -16,9 +16,9 @@ const MAX_POLL_ATTEMPTS = 20 // ~50s total
 
 const destinationFor = (from: string | null) => {
   if (from && allowedDestinations.has(from)) {
-    return `/settings/${from}`
+    return `/${from}`
   }
-  return "/settings/billing"
+  return "/billing"
 }
 
 type Phase =
@@ -241,11 +241,11 @@ function FailedState({
       <div className="flex gap-2">
         {target ? (
           <Button asChild size="sm" variant="outline" type="button">
-            <Link href={target}>Back to settings</Link>
+            <Link href={target}>Continue</Link>
           </Button>
         ) : (
           <Button asChild size="sm" type="button">
-            <Link href="/settings/billing">Back to settings</Link>
+            <Link href="/billing">Back to billing</Link>
           </Button>
         )}
       </div>

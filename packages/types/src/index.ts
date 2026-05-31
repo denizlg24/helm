@@ -901,4 +901,111 @@ export const UploadFileMetadataSchema = z.object({
 
 export type FileBlob = z.infer<typeof FileBlobSchema>
 export type FileRef = z.infer<typeof FileRefSchema>
+
+// --- Desktop installer builds ---------------------------------------------
+
+// The themes that can be baked into a custom desktop shell. Must stay in sync
+// with the themes in packages/ui/src/styles/themes and the ALLOWED_THEMES set
+// in scripts/desktop-custom-build.ts. "default" is the console's own look (the
+// unscoped :root theme in globals.css); it has no [data-theme] override, so the
+// app falls through to :root when it is selected.
+export const DesktopThemeSchema = z.enum([
+  "default",
+  "rose",
+  "coral",
+  "blush",
+  "amber",
+  "butter",
+  "mint",
+  "cyan",
+  "sky",
+  "lavender",
+  "plum",
+])
+
+export const DesktopPlatformSchema = z.enum(["linux", "windows", "macos"])
+
+export const DesktopBuildStatusSchema = z.enum([
+  "queued",
+  "building",
+  "ready",
+  "failed",
+])
+
+export const DesktopBuildArtifactSchema = z.object({
+  platform: DesktopPlatformSchema,
+  filename: z.string().min(1),
+  downloadUrl: z.string().url(),
+  sizeBytes: z.number().int().nonnegative(),
+})
+
+// A custom desktop installer build. `callbackToken` is the per-build secret the
+// CI workflow must echo back to authorize its result callback; it is never sent
+// to clients (the API strips it before returning rows).
+export const DesktopBuildSchema = z.object({
+  id: z.string().min(1),
+  workspaceId: z.string().min(1),
+  tenantId: z.string().min(1),
+  userId: z.string().min(1),
+  status: DesktopBuildStatusSchema,
+  appName: z.string().min(1),
+  identifier: z.string().nullable().optional(),
+  theme: DesktopThemeSchema,
+  features: z.array(z.string().min(1)),
+  artifacts: z.array(DesktopBuildArtifactSchema),
+  error: z.string().nullable().optional(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+})
+
+export const CreateDesktopBuildInputSchema = z.object({
+  appName: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(
+      /^[\w .'-]+$/u,
+      "App name can only contain letters, numbers, spaces, dots, apostrophes, underscores, and hyphens"
+    )
+    .default("Helm"),
+  identifier: z
+    .string()
+    .regex(
+      /^[a-zA-Z][a-zA-Z0-9-]*(?:\.[a-zA-Z0-9][a-zA-Z0-9-]*)+$/u,
+      "Identifier must be a reverse-DNS style string"
+    )
+    .optional(),
+  theme: DesktopThemeSchema.default("sky"),
+  // Empty array = full build with every feature included.
+  features: z.array(z.string().min(1)).default([]),
+})
+
+export const DesktopBuildListResponseSchema = z.object({
+  builds: z.array(DesktopBuildSchema),
+})
+
+// Posted by the CI workflow once a platform's installers are built and
+// uploaded. One callback per matrix OS, so the API merges artifacts across
+// calls keyed by the build id.
+export const DesktopBuildCallbackInputSchema = z.object({
+  status: z.enum(["ready", "failed"]),
+  platform: DesktopPlatformSchema,
+  artifacts: z.array(DesktopBuildArtifactSchema).default([]),
+  error: z.string().max(2000).nullable().optional(),
+})
+
+export type DesktopTheme = z.infer<typeof DesktopThemeSchema>
+export type DesktopPlatform = z.infer<typeof DesktopPlatformSchema>
+export type DesktopBuildStatus = z.infer<typeof DesktopBuildStatusSchema>
+export type DesktopBuildArtifact = z.infer<typeof DesktopBuildArtifactSchema>
+export type DesktopBuild = z.infer<typeof DesktopBuildSchema>
+export type CreateDesktopBuildInput = z.infer<
+  typeof CreateDesktopBuildInputSchema
+>
+export type DesktopBuildListResponse = z.infer<
+  typeof DesktopBuildListResponseSchema
+>
+export type DesktopBuildCallbackInput = z.infer<
+  typeof DesktopBuildCallbackInputSchema
+>
 export type UploadFileMetadata = z.infer<typeof UploadFileMetadataSchema>

@@ -4,66 +4,93 @@ import { cn } from "@workspace/ui/lib/utils"
 import {
   AppWindowIcon,
   GaugeIcon,
+  HouseIcon,
   KeyRoundIcon,
   LaptopIcon,
+  MonitorDownIcon,
+  SettingsIcon,
   WalletIcon,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import type * as React from "react"
 
-export interface SettingsNavItem {
+export interface ConsoleNavItem {
   href: string
   label: string
   description: string
   icon: React.ComponentType<{ className?: string }>
 }
 
-export const settingsNavItems: readonly SettingsNavItem[] = [
+export const consoleNavItems: readonly ConsoleNavItem[] = [
   {
-    href: "/settings/usage",
+    href: "/",
+    label: "Overview",
+    description: "Your account at a glance.",
+    icon: HouseIcon,
+  },
+  {
+    href: "/usage",
     label: "Usage",
     description: "Monthly allowance, credits, request volume.",
     icon: GaugeIcon,
   },
   {
-    href: "/settings/billing",
+    href: "/billing",
     label: "Billing",
     description: "Plan, subscriptions, invoices.",
     icon: WalletIcon,
   },
   {
-    href: "/settings/modules",
+    href: "/modules",
     label: "Modules",
     description: "Enable or disable features in your workspace.",
     icon: AppWindowIcon,
   },
   {
-    href: "/settings/devices",
+    href: "/devices",
     label: "Devices",
     description: "Manage signed-in desktop and mobile clients.",
     icon: LaptopIcon,
   },
   {
-    href: "/settings/api-tokens",
+    href: "/desktop",
+    label: "Desktop app",
+    description: "Generate and download a custom desktop installer.",
+    icon: MonitorDownIcon,
+  },
+  {
+    href: "/api-tokens",
     label: "API tokens",
     description: "Personal access tokens for scripts and integrations.",
     icon: KeyRoundIcon,
   },
+  {
+    href: "/settings",
+    label: "Settings",
+    description: "Appearance and console preferences.",
+    icon: SettingsIcon,
+  },
 ]
 
-interface SettingsNavListProps {
+export const isActive = (pathname: string | null, href: string) => {
+  if (href === "/") {
+    return pathname === "/"
+  }
+  return pathname === href || pathname?.startsWith(`${href}/`)
+}
+
+interface ConsoleNavListProps {
   onNavigate?: () => void
 }
 
-export function SettingsNavList({ onNavigate }: SettingsNavListProps) {
+export function ConsoleNavList({ onNavigate }: ConsoleNavListProps) {
   const pathname = usePathname()
 
   return (
-    <nav aria-label="Settings sections" className="flex flex-col gap-1">
-      {settingsNavItems.map((item) => {
-        const active =
-          pathname === item.href || pathname?.startsWith(`${item.href}/`)
+    <nav aria-label="Console sections" className="flex flex-col gap-1">
+      {consoleNavItems.map((item) => {
+        const active = isActive(pathname, item.href)
         const Icon = item.icon
 
         return (
