@@ -1,4 +1,4 @@
-[data-theme="lavender"] {
+:root[data-theme="lavender"] {
   --background: #f8f6fb;
   --surface: #e2dcef;
   --muted: #b8acd6;
@@ -43,7 +43,7 @@
   --sidebar-ring: var(--accent-strong);
 }
 
-[data-theme="lavender"].dark {
+:root[data-theme="lavender"].dark {
   --background: #221e30;
   --foreground: #f8f6fb;
 

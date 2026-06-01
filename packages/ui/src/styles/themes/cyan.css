@@ -1,4 +1,4 @@
-[data-theme="cyan"] {
+:root[data-theme="cyan"] {
   --background: #f3faf9;
   --surface: #cde9e5;
   --muted: #8fcec5;
@@ -43,7 +43,7 @@
   --sidebar-ring: var(--accent-strong);
 }
 
-[data-theme="cyan"].dark {
+:root[data-theme="cyan"].dark {
   --background: #143030;
   --foreground: #f3faf9;
 

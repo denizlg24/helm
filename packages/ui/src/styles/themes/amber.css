@@ -1,4 +1,4 @@
-[data-theme="amber"] {
+:root[data-theme="amber"] {
   --background: #fbf8f1;
   --surface: #f3e7c4;
   --muted: #e6c98a;
@@ -43,7 +43,7 @@
   --sidebar-ring: var(--accent-strong);
 }
 
-[data-theme="amber"].dark {
+:root[data-theme="amber"].dark {
   --background: #2e2615;
   --foreground: #fbf8f1;
 

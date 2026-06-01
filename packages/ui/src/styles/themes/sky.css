@@ -1,4 +1,4 @@
-[data-theme="sky"] {
+:root[data-theme="sky"] {
   --background: #f4f8fc;
   --surface: #d4e6f4;
   --muted: #9bc4e2;
@@ -43,7 +43,7 @@
   --sidebar-ring: var(--accent-strong);
 }
 
-[data-theme="sky"].dark {
+:root[data-theme="sky"].dark {
   --background: #15273a;
   --foreground: #f4f8fc;
 
