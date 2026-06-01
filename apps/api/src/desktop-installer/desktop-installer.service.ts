@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto"
+import { Readable } from "node:stream"
 import {
   ForbiddenException,
   Injectable,
@@ -32,10 +33,26 @@ const GithubEnvSchema = z.object({
   GITHUB_INSTALLER_CALLBACK_BASE_URL: z.string().url(),
 })
 
+const DesktopArtifactProxyEnvSchema = z.object({
+  HELM_AUTH_BASE_URL: z.string().url().default("http://localhost:3003"),
+  STORAGE_DENIZ_CLOUD_URL: z.string().url(),
+  STORAGE_DENIZ_CLOUD_API_KEY: z.string().min(1),
+})
+
 const DISPATCH_FAILURE_MESSAGE =
   "Could not start the installer build. Please try again."
 
 type DesktopBuildRow = typeof desktopBuilds.$inferSelect
+
+interface ProxiedArtifact {
+  filename: string
+  stream: Readable
+  contentType: string
+  contentLength: number
+  totalSize: number
+  isPartial: boolean
+  contentRange: string | null
+}
 
 @Injectable()
 export class DesktopInstallerService {
@@ -53,7 +70,7 @@ export class DesktopInstallerService {
       )
       .orderBy(desc(desktopBuilds.createdAt))
 
-    return rows.map(toDesktopBuild)
+    return rows.map((row) => toDesktopBuild(row))
   }
 
   async get(authContext: AuthContext, buildId: string): Promise<DesktopBuild> {
@@ -159,6 +176,55 @@ export class DesktopInstallerService {
     }
 
     return toDesktopBuild(building ?? row)
+  }
+
+  async downloadArtifact(
+    authContext: AuthContext,
+    buildId: string,
+    artifactIndex: number,
+    rangeHeader?: string
+  ): Promise<ProxiedArtifact> {
+    const row = await this.findOwnedRow(authContext, buildId)
+    const artifact = row.artifactsJson[artifactIndex]
+    if (!artifact) {
+      throw new NotFoundException("Artifact not found")
+    }
+
+    const config = this.parseArtifactProxyConfig()
+    const storageBaseUrl = config.STORAGE_DENIZ_CLOUD_URL.replace(/\/$/, "")
+    if (!artifact.downloadUrl.startsWith(`${storageBaseUrl}/`)) {
+      throw new ServiceUnavailableException("Artifact storage URL is invalid")
+    }
+
+    const headers: Record<string, string> = {
+      "X-API-Key": config.STORAGE_DENIZ_CLOUD_API_KEY,
+    }
+    if (rangeHeader) {
+      headers.Range = rangeHeader
+    }
+
+    const response = await fetch(artifact.downloadUrl, { headers })
+    if (response.status === 404) {
+      throw new NotFoundException("Artifact file not found")
+    }
+    if (response.status !== 200 && response.status !== 206) {
+      throw new ServiceUnavailableException("Could not download artifact")
+    }
+    if (!response.body) {
+      throw new ServiceUnavailableException("Artifact download had no body")
+    }
+
+    const contentLength = Number(response.headers.get("content-length") ?? 0)
+    return {
+      filename: artifact.filename,
+      stream: webStreamToReadable(response.body),
+      contentType:
+        response.headers.get("content-type") ?? "application/octet-stream",
+      contentLength,
+      totalSize: parseTotalSize(response) ?? contentLength,
+      isPartial: response.status === 206,
+      contentRange: response.headers.get("content-range"),
+    }
   }
 
   async applyCallback(
@@ -272,6 +338,16 @@ export class DesktopInstallerService {
     return result.data
   }
 
+  private parseArtifactProxyConfig() {
+    const result = DesktopArtifactProxyEnvSchema.safeParse(process.env)
+    if (!result.success) {
+      throw new ServiceUnavailableException(
+        "Desktop artifact downloads are not configured on this server."
+      )
+    }
+    return result.data
+  }
+
   private async dispatchWorkflow(
     config: z.infer<typeof GithubEnvSchema>,
     row: DesktopBuildRow
@@ -368,9 +444,51 @@ function toDesktopBuild(row: DesktopBuildRow): DesktopBuild {
     identifier: row.identifier,
     theme: row.theme,
     features: row.features,
-    artifacts: row.artifactsJson,
+    artifacts: row.artifactsJson.map((artifact, index) => ({
+      ...artifact,
+      downloadUrl: artifactProxyUrl(row.id, index),
+    })),
     error: row.error,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+  })
+}
+
+function artifactProxyUrl(buildId: string, artifactIndex: number): string {
+  const baseUrl = DesktopArtifactProxyEnvSchema.shape.HELM_AUTH_BASE_URL.parse(
+    process.env.HELM_AUTH_BASE_URL
+  ).replace(/\/$/, "")
+  return `${baseUrl}/api/desktop-installer/builds/${encodeURIComponent(buildId)}/artifacts/${artifactIndex}/download`
+}
+
+function parseTotalSize(response: Response): number | undefined {
+  const contentRange = response.headers.get("content-range")
+  const total = contentRange?.split("/").pop()
+  const parsed = total ? Number(total) : Number.NaN
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function webStreamToReadable(body: ReadableStream<Uint8Array>): Readable {
+  const reader = body.getReader()
+  let inFlight = false
+  return new Readable({
+    read() {
+      if (inFlight) {
+        return
+      }
+      inFlight = true
+      reader
+        .read()
+        .then(({ done, value }) => {
+          inFlight = false
+          this.push(done ? null : value)
+        })
+        .catch((error) => {
+          inFlight = false
+          this.destroy(
+            error instanceof Error ? error : new Error(String(error))
+          )
+        })
+    },
   })
 }

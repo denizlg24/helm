@@ -6,12 +6,16 @@ import {
   HttpCode,
   Param,
   Post,
+  Req,
+  Res,
 } from "@nestjs/common"
 import {
   type AuthContext,
   CreateDesktopBuildInputSchema,
   DesktopBuildCallbackInputSchema,
 } from "@workspace/types"
+import type { FastifyReply, FastifyRequest } from "fastify"
+import { z } from "zod"
 import {
   CurrentAuthContext,
   Public,
@@ -50,6 +54,38 @@ export class DesktopInstallerController {
     @Param("id") id: string
   ) {
     return this.desktopInstallerService.get(authContext, id)
+  }
+
+  @Get("builds/:id/artifacts/:artifactIndex/download")
+  @RequireWorkspace()
+  async downloadArtifact(
+    @CurrentAuthContext() authContext: AuthContext,
+    @Param("id") id: string,
+    @Param("artifactIndex") artifactIndex: string,
+    @Req() request: FastifyRequest,
+    @Res() reply: FastifyReply
+  ) {
+    const artifact = await this.desktopInstallerService.downloadArtifact(
+      authContext,
+      id,
+      z.coerce.number().int().nonnegative().parse(artifactIndex),
+      request.headers.range
+    )
+
+    reply
+      .header("Content-Type", artifact.contentType)
+      .header("Content-Length", String(artifact.contentLength))
+      .header(
+        "Content-Disposition",
+        `attachment; filename="${encodeURIComponent(artifact.filename)}"`
+      )
+      .header("Accept-Ranges", "bytes")
+
+    if (artifact.isPartial && artifact.contentRange) {
+      reply.status(206).header("Content-Range", artifact.contentRange)
+    }
+
+    return reply.send(artifact.stream)
   }
 
   @Post("builds/:id/callback")
