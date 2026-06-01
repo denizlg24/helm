@@ -24,6 +24,8 @@ concurrency:
 
 env:
   TURBO_TELEMETRY_DISABLED: 1
+  VITE_HELM_API_URL: ${{ secrets.VITE_HELM_API_URL }}
+  VITE_HELM_CONSOLE_URL: ${{ secrets.VITE_HELM_CONSOLE_URL }}
 
 jobs:
   build:

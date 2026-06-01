@@ -71,6 +71,8 @@ env:
   HELM_INSTALLER_CALLBACK_TOKEN: ${{ github.event.inputs.callback_token }}
   STORAGE_DENIZ_CLOUD_URL: ${{ secrets.STORAGE_DENIZ_CLOUD_URL }}
   STORAGE_DENIZ_CLOUD_API_KEY: ${{ secrets.STORAGE_DENIZ_CLOUD_API_KEY }}
+  VITE_HELM_API_URL: ${{ secrets.VITE_HELM_API_URL }}
+  VITE_HELM_CONSOLE_URL: ${{ secrets.VITE_HELM_CONSOLE_URL }}
 
 jobs:
   build:

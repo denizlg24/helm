@@ -9,9 +9,9 @@ import { createDesktopAuthClient } from "./lib/auth-client"
 import { keychain } from "./lib/keychain"
 
 const CLIENT_ID = "helm-desktop"
-const API_URL = import.meta.env.VITE_HELM_API_URL ?? "http://localhost:3003"
+const API_URL = import.meta.env.VITE_HELM_API_URL || "http://localhost:3003"
 const CONSOLE_URL =
-  import.meta.env.VITE_HELM_CONSOLE_URL ?? "http://localhost:3002"
+  import.meta.env.VITE_HELM_CONSOLE_URL || "http://localhost:3002"
 const ONBOARDING_URL = `${CONSOLE_URL}/onboarding/workspace`
 
 interface SessionUser {

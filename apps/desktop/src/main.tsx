@@ -5,6 +5,26 @@ import { openUrl } from "@tauri-apps/plugin-opener"
 import { App } from "./App"
 import { featureBuildInfo } from "./lib/features"
 
+// Temporary production diagnostics: paint uncaught errors into the page so a
+// white screen reveals its cause without devtools. Remove once resolved.
+function paintFatal(label: string, detail: unknown) {
+  const message =
+    detail instanceof Error
+      ? `${detail.name}: ${detail.message}\n${detail.stack ?? ""}`
+      : String(detail)
+  const pre = document.createElement("pre")
+  pre.style.cssText =
+    "position:fixed;inset:0;margin:0;padding:16px;background:#1a0000;color:#ff8080;font:12px/1.4 monospace;white-space:pre-wrap;overflow:auto;z-index:2147483647"
+  pre.textContent = `[${label}]\n${message}`
+  document.body.appendChild(pre)
+}
+window.addEventListener("error", (e) =>
+  paintFatal("error", e.error ?? e.message)
+)
+window.addEventListener("unhandledrejection", (e) =>
+  paintFatal("unhandledrejection", e.reason)
+)
+
 const buildInfo = featureBuildInfo()
 document.documentElement.dataset.theme = buildInfo.theme
 document.title = buildInfo.appName

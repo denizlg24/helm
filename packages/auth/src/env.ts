@@ -45,7 +45,10 @@ export const HelmAuthServerEnvSchema = z.object({
 })
 
 export const HelmPublicClientEnvSchema = z.object({
-  apiUrl: z.string().url().default("http://localhost:3003"),
+  apiUrl: z.preprocess(
+    emptyStringToUndefined,
+    z.string().url().default("http://localhost:3003")
+  ),
 })
 
 export const HelmApiRuntimeEnvSchema = z.object({

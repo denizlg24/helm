@@ -1,5 +1,7 @@
 use keyring::Entry;
 use serde::Serialize;
+#[cfg(feature = "devtools")]
+use tauri::Manager;
 use std::fs;
 use std::io::Read;
 
@@ -127,7 +129,15 @@ pub fn run() {
             keychain_delete,
             select_files
         ])
-        .setup(|_app| Ok(()))
+        .setup(|_app| {
+            // Temporary: open devtools in the release build so production-only
+            // white-screen errors are visible. Revert once diagnosed.
+            #[cfg(feature = "devtools")]
+            if let Some(window) = _app.get_webview_window("main") {
+                window.open_devtools();
+            }
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
