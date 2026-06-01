@@ -32,6 +32,9 @@ const GithubEnvSchema = z.object({
   GITHUB_INSTALLER_CALLBACK_BASE_URL: z.string().url(),
 })
 
+const DISPATCH_FAILURE_MESSAGE =
+  "Could not start the installer build. Please try again."
+
 type DesktopBuildRow = typeof desktopBuilds.$inferSelect
 
 @Injectable()
@@ -105,19 +108,28 @@ export class DesktopInstallerService {
     }
 
     try {
-      await this.dispatchWorkflow(config, { ...row, callbackToken })
+      await this.dispatchWorkflow(config, row)
     } catch (error) {
+      console.error("Failed to dispatch desktop installer workflow", {
+        error,
+        buildId: id,
+        workspaceId: authContext.workspaceId,
+        theme: input.theme,
+      })
       await db
         .update(desktopBuilds)
         .set({
           status: "failed",
-          error: error instanceof Error ? error.message : "Dispatch failed",
+          error: DISPATCH_FAILURE_MESSAGE,
           updatedAt: new Date(),
         })
-        .where(eq(desktopBuilds.id, id))
-      throw new ServiceUnavailableException(
-        "Could not start the installer build. Please try again."
-      )
+        .where(
+          and(
+            eq(desktopBuilds.id, id),
+            eq(desktopBuilds.workspaceId, authContext.workspaceId)
+          )
+        )
+      throw new ServiceUnavailableException(DISPATCH_FAILURE_MESSAGE)
     }
 
     const [building] = await db
@@ -196,12 +208,12 @@ export class DesktopInstallerService {
 
       const hasArtifacts = mergedArtifacts.length > 0
       const nextStatus =
-        allPlatformsCompleted && hasArtifacts
-          ? "ready"
-          : row.status === "ready"
+        input.status === "failed"
+          ? "failed"
+          : allPlatformsCompleted && hasArtifacts
             ? "ready"
-            : input.status === "failed" && !hasArtifacts
-              ? "failed"
+            : row.status === "ready"
+              ? "ready"
               : row.status
 
       await tx
@@ -212,7 +224,7 @@ export class DesktopInstallerService {
           error:
             nextStatus === "ready"
               ? null
-              : input.status === "failed" && !hasArtifacts
+              : input.status === "failed"
                 ? (input.error ?? `Build failed on ${input.platform}`)
                 : row.error,
           updatedAt: new Date(),
@@ -275,6 +287,7 @@ export class DesktopInstallerService {
       features: row.features.join(","),
       upload_folder: `desktop-installers/${row.id}`,
       callback_url: callbackUrl,
+      callback_token: row.callbackToken,
     }
     if (row.identifier) {
       inputs.app_identifier = row.identifier
