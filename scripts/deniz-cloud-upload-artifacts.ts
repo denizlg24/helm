@@ -55,6 +55,10 @@ function toSnakeCase(input: string): string {
     .replace(/^_|_$/g, "")
 }
 
+function toCloudFilename(input: string): string {
+  return toSnakeCase(input)
+}
+
 function isArtifact(path: string): boolean {
   const lower = path.toLowerCase()
   return Array.from(ARTIFACT_EXTENSIONS).some((extension) =>
@@ -102,7 +106,7 @@ class DenizCloudClient {
     const folder = await this.resolveFolder(folderSegments)
     const fileStat = await stat(filePath)
     const size = fileStat.size
-    const filename = basename(filePath)
+    const filename = toCloudFilename(basename(filePath))
     const uploadId = await this.createUploadSession(folder.path, filename, size)
     if (uploadId === null) {
       throw new Error(
@@ -110,18 +114,18 @@ class DenizCloudClient {
       )
     }
     await this.patchUpload(uploadId, filePath)
-    const id = await this.findFileIdByName(folder.id, filename)
-    if (!id) {
+    const uploadedFile = await this.findFileByName(folder.id, filename)
+    if (!uploadedFile) {
       throw new Error(
         `Uploaded artifact was not found after finalize: ${filename}`
       )
     }
     return {
-      id,
-      filename,
-      path: `${folder.path}/${filename}`,
+      id: uploadedFile.id,
+      filename: uploadedFile.filename,
+      path: `${folder.path}/${uploadedFile.filename}`,
       sizeBytes: size,
-      downloadUrl: `${this.baseUrl}/api/files/${encodeURIComponent(id)}/download`,
+      downloadUrl: `${this.baseUrl}/api/files/${encodeURIComponent(uploadedFile.id)}/download`,
     } satisfies UploadedArtifact
   }
 
@@ -320,15 +324,18 @@ class DenizCloudClient {
     }
   }
 
-  private async findFileIdByName(folderId: string, filename: string) {
+  private async findFileByName(folderId: string, filename: string) {
+    const normalizedFilename = toCloudFilename(filename)
     let page = 1
     for (;;) {
       const contents = await this.listContents(folderId, page)
       const found = contents.data.files.find(
-        (file) => file.filename === filename
+        (file) =>
+          file.filename === filename ||
+          toCloudFilename(file.filename) === normalizedFilename
       )
       if (found) {
-        return found.id
+        return found
       }
       if (page >= contents.pagination.totalPages) {
         return null
