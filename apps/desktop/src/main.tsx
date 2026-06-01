@@ -10,7 +10,7 @@ document.documentElement.dataset.theme = buildInfo.theme
 document.title = buildInfo.appName
 
 function disableMenu() {
-  if (window.location.hostname !== "tauri.localhost") {
+  if (import.meta.env.DEV) {
     return
   }
 
@@ -25,7 +25,7 @@ function disableMenu() {
 }
 
 function openExternalLinksInBrowser() {
-  if (window.location.hostname !== "tauri.localhost") {
+  if (import.meta.env.DEV) {
     return
   }
 
