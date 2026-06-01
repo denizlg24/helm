@@ -2,7 +2,7 @@ import { customBuild } from "../generated/custom-build"
 
 export type FeatureId = string
 
-export const enabledFeatures = customBuild.enabledFeatures
+export const enabledFeatures: FeatureId[] = [...customBuild.enabledFeatures]
 export const enabledFeatureSet = new Set<FeatureId>(enabledFeatures)
 export const isFullFeatureBuild = enabledFeatures.length === 0
 

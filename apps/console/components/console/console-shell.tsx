@@ -1,5 +1,6 @@
 "use client"
 
+import { ForbiddenError } from "@workspace/api-client"
 import { Button } from "@workspace/ui/components/button"
 import {
   Sheet,
@@ -13,6 +14,7 @@ import { LogOutIcon, MenuIcon } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
+import { apiClient } from "../../lib/api-client"
 import { authClient } from "../../lib/auth-client"
 import { ConsoleNavList, consoleNavItems, isActive } from "./console-nav"
 
@@ -24,6 +26,7 @@ export function ConsoleShell({ children }: ConsoleShellProps) {
   const router = useRouter()
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [checkingWorkspace, setCheckingWorkspace] = useState(true)
   const { data: session, isPending } = authClient.useSession()
 
   useEffect(() => {
@@ -32,7 +35,46 @@ export function ConsoleShell({ children }: ConsoleShellProps) {
     }
   }, [isPending, session, router])
 
-  if (isPending || !session) {
+  useEffect(() => {
+    if (isPending || !session) {
+      return
+    }
+
+    let cancelled = false
+
+    apiClient.workspace
+      .current()
+      .then((currentWorkspace) => {
+        if (cancelled) {
+          return
+        }
+
+        if (!currentWorkspace.workspace.onboardingCompletedAt) {
+          router.replace("/onboarding")
+          return
+        }
+
+        setCheckingWorkspace(false)
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return
+        }
+
+        if (error instanceof ForbiddenError) {
+          router.replace("/onboarding/workspace")
+          return
+        }
+
+        setCheckingWorkspace(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [isPending, session, router])
+
+  if (isPending || !session || checkingWorkspace) {
     return (
       <div className="flex min-h-svh items-center justify-center bg-background">
         <Spinner className="size-5 text-muted-foreground" />

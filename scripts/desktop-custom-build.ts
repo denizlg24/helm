@@ -197,7 +197,7 @@ async function main() {
         "export const customBuild = {",
         `  appName: ${JSON.stringify(appName)},`,
         `  buildId: ${JSON.stringify(buildId)},`,
-        `  enabledFeatures: ${JSON.stringify(enabledFeatures)},`,
+        `  enabledFeatures: ${JSON.stringify(enabledFeatures)} as string[],`,
         `  theme: ${JSON.stringify(theme)},`,
         "} as const",
         "",
