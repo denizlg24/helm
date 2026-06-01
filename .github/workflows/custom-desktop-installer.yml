@@ -127,6 +127,8 @@ jobs:
 
       - name: Upload installers to Deniz Cloud
         id: upload
+        env:
+          HELM_INSTALLER_RUNNER_OS: ${{ runner.os }}
         run: bun run desktop:upload:artifacts
 
       - name: Upload manifest to workflow artifacts

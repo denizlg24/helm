@@ -20,6 +20,14 @@ const ARTIFACT_EXTENSIONS = new Set([
   ".zip",
 ])
 
+type Platform = "linux" | "windows" | "macos"
+
+const PLATFORM_ARTIFACT_EXTENSIONS: Record<Platform, readonly string[]> = {
+  linux: [".appimage", ".deb", ".rpm", ".tar.gz"],
+  windows: [".exe", ".msi"],
+  macos: [".dmg"],
+}
+
 interface FolderRef {
   id: string
   path: string
@@ -64,6 +72,33 @@ function isArtifact(path: string): boolean {
   return Array.from(ARTIFACT_EXTENSIONS).some((extension) =>
     lower.endsWith(extension)
   )
+}
+
+function isPlatformArtifact(path: string, platform: Platform): boolean {
+  const lower = path.toLowerCase()
+  return PLATFORM_ARTIFACT_EXTENSIONS[platform].some((extension) =>
+    lower.endsWith(extension)
+  )
+}
+
+function currentPlatform(): Platform {
+  const runnerOs = process.env.HELM_INSTALLER_RUNNER_OS?.trim().toLowerCase()
+  if (runnerOs === "linux" || runnerOs === "windows" || runnerOs === "macos") {
+    return runnerOs
+  }
+
+  switch (process.platform) {
+    case "linux":
+      return "linux"
+    case "win32":
+      return "windows"
+    case "darwin":
+      return "macos"
+    default:
+      throw new Error(
+        `Unsupported artifact upload platform: ${process.platform}`
+      )
+  }
 }
 
 function delay(ms: number): Promise<void> {
@@ -385,9 +420,14 @@ async function main() {
     throw new Error(`Artifact directory does not exist: ${artifactDir}`)
   }
 
-  const artifacts = await collectArtifacts(artifactDir)
+  const platform = currentPlatform()
+  const artifacts = (await collectArtifacts(artifactDir)).filter((artifact) =>
+    isPlatformArtifact(artifact, platform)
+  )
   if (artifacts.length === 0) {
-    throw new Error(`No desktop installer artifacts found in ${artifactDir}`)
+    throw new Error(
+      `No ${platform} desktop installer artifacts found in ${artifactDir}`
+    )
   }
 
   const client = new DenizCloudClient(baseUrl, apiKey)

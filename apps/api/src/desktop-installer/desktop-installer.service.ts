@@ -48,8 +48,7 @@ interface ProxiedArtifact {
   filename: string
   stream: Readable
   contentType: string
-  contentLength: number
-  totalSize: number
+  contentLength: number | null
   isPartial: boolean
   contentRange: string | null
 }
@@ -214,14 +213,16 @@ export class DesktopInstallerService {
       throw new ServiceUnavailableException("Artifact download had no body")
     }
 
-    const contentLength = Number(response.headers.get("content-length") ?? 0)
+    const contentLengthHeader = response.headers.get("content-length")
+    const contentLength = contentLengthHeader
+      ? Number(contentLengthHeader)
+      : null
     return {
       filename: artifact.filename,
       stream: webStreamToReadable(response.body),
       contentType:
         response.headers.get("content-type") ?? "application/octet-stream",
-      contentLength,
-      totalSize: parseTotalSize(response) ?? contentLength,
+      contentLength: Number.isFinite(contentLength) ? contentLength : null,
       isPartial: response.status === 206,
       contentRange: response.headers.get("content-range"),
     }
@@ -459,13 +460,6 @@ function artifactProxyUrl(buildId: string, artifactIndex: number): string {
     process.env.HELM_AUTH_BASE_URL
   ).replace(/\/$/, "")
   return `${baseUrl}/api/desktop-installer/builds/${encodeURIComponent(buildId)}/artifacts/${artifactIndex}/download`
-}
-
-function parseTotalSize(response: Response): number | undefined {
-  const contentRange = response.headers.get("content-range")
-  const total = contentRange?.split("/").pop()
-  const parsed = total ? Number(total) : Number.NaN
-  return Number.isFinite(parsed) ? parsed : undefined
 }
 
 function webStreamToReadable(body: ReadableStream<Uint8Array>): Readable {

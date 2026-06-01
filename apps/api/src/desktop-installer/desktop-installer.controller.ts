@@ -74,12 +74,15 @@ export class DesktopInstallerController {
 
     reply
       .header("Content-Type", artifact.contentType)
-      .header("Content-Length", String(artifact.contentLength))
       .header(
         "Content-Disposition",
         `attachment; filename="${encodeURIComponent(artifact.filename)}"`
       )
       .header("Accept-Ranges", "bytes")
+
+    if (artifact.contentLength !== null) {
+      reply.header("Content-Length", String(artifact.contentLength))
+    }
 
     if (artifact.isPartial && artifact.contentRange) {
       reply.status(206).header("Content-Range", artifact.contentRange)
