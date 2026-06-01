@@ -108,7 +108,7 @@ export class DesktopInstallerService {
     }
 
     try {
-      await this.dispatchWorkflow(config, { ...row, callbackToken })
+      await this.dispatchWorkflow(config, row)
     } catch (error) {
       console.error("Failed to dispatch desktop installer workflow", {
         error,
@@ -123,7 +123,12 @@ export class DesktopInstallerService {
           error: DISPATCH_FAILURE_MESSAGE,
           updatedAt: new Date(),
         })
-        .where(eq(desktopBuilds.id, id))
+        .where(
+          and(
+            eq(desktopBuilds.id, id),
+            eq(desktopBuilds.workspaceId, authContext.workspaceId)
+          )
+        )
       throw new ServiceUnavailableException(DISPATCH_FAILURE_MESSAGE)
     }
 
