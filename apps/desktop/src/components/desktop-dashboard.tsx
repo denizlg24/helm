@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core"
+import { platform } from "@tauri-apps/plugin-os"
 import {
   ChatView,
   ConversationSidebar,
@@ -13,6 +14,7 @@ import { Spinner } from "@workspace/ui/components/spinner"
 import { cn } from "@workspace/ui/lib/utils"
 import { useCallback, useEffect, useState } from "react"
 import { apiClient, setApiToken, setApiWorkspaceId } from "../lib/api"
+import { WindowControls } from "./window-controls"
 
 interface NativeSelectedFile {
   name: string
@@ -72,6 +74,7 @@ export function DesktopDashboard({
   const [displayUser, setDisplayUser] = useState(user)
   const [loadingList, setLoadingList] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isMac] = useState(() => platform() === "macos")
 
   const refresh = useCallback(async () => {
     try {
@@ -188,12 +191,14 @@ export function DesktopDashboard({
         <AppHeader
           title="Dashboard"
           dragRegion
+          className={isMac ? "pl-20" : undefined}
           sidebarOpen={sidebarOpen}
           onToggleSidebar={() => setSidebarOpen((open) => !open)}
           user={displayUser}
           onLogout={onDisconnect}
           backgroundItems={[]}
           notifications={[]}
+          endSlot={<WindowControls />}
         />
 
         <main className="min-h-0 flex-1">

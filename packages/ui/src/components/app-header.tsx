@@ -31,6 +31,7 @@ import {
   Menu,
   Settings,
 } from "lucide-react"
+import type { ReactNode } from "react"
 
 export interface AppHeaderUser {
   name?: string | null
@@ -63,6 +64,7 @@ export interface AppHeaderProps {
   onToggleSidebar?: () => void
   onSettings?: () => void
   onLogout?: () => void
+  endSlot?: ReactNode
 }
 
 export function AppHeader({
@@ -76,6 +78,7 @@ export function AppHeader({
   onToggleSidebar,
   onSettings,
   onLogout,
+  endSlot,
 }: AppHeaderProps) {
   const isMobile = useIsMobile()
   const unreadCount = notifications.filter((item) => item.unread).length
@@ -131,6 +134,8 @@ export function AppHeader({
           user={user}
         />
       </div>
+
+      {endSlot}
     </header>
   )
 }

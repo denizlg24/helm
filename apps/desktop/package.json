@@ -18,6 +18,7 @@
   "dependencies": {
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-opener": "^2.5.4",
+    "@tauri-apps/plugin-os": "^2.3.2",
     "@workspace/api-client": "workspace:*",
     "@workspace/assistant": "workspace:*",
     "@workspace/auth": "workspace:*",
