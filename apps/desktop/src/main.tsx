@@ -23,7 +23,7 @@ function disableMenu() {
 
 function enableDevtoolsToggle() {
   document.addEventListener("keydown", (event) => {
-    if (event.key === "F12") {
+    if (event.key === "F12" && !event.repeat) {
       event.preventDefault()
       void invoke("toggle_devtools")
     }

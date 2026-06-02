@@ -6,33 +6,29 @@ import { useEffect, useState } from "react"
 const appWindow = getCurrentWindow()
 
 export function WindowControls() {
-  const [isMac, setIsMac] = useState(false)
+  const [isMac] = useState(() => platform() === "macos")
   const [isMaximized, setIsMaximized] = useState(false)
-  const [ready, setReady] = useState(false)
 
   useEffect(() => {
+    // macOS renders native overlay traffic lights; we only own the buttons
+    // on the platforms where decorations are stripped.
+    if (isMac) {
+      return
+    }
+
     let unlisten: (() => void) | undefined
 
     void (async () => {
-      const mac = platform() === "macos"
-      setIsMac(mac)
-
-      // macOS renders native overlay traffic lights; we only own the buttons
-      // on the platforms where decorations are stripped.
-      if (!mac) {
+      setIsMaximized(await appWindow.isMaximized())
+      unlisten = await appWindow.onResized(async () => {
         setIsMaximized(await appWindow.isMaximized())
-        unlisten = await appWindow.onResized(async () => {
-          setIsMaximized(await appWindow.isMaximized())
-        })
-      }
-
-      setReady(true)
+      })
     })()
 
     return () => unlisten?.()
-  }, [])
+  }, [isMac])
 
-  if (!ready || isMac) {
+  if (isMac) {
     return null
   }
 
