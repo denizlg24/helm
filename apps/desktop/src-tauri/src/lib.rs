@@ -2,6 +2,7 @@ use keyring::Entry;
 use serde::Serialize;
 use std::fs;
 use std::io::Read;
+use tauri::Manager;
 
 const KEYRING_SERVICE: &str = "com.helm.desktop";
 const MAX_FILE_SIZE_BYTES: u64 = 50 * 1024 * 1024; // 50 MB
@@ -117,17 +118,47 @@ fn select_files() -> Result<Vec<SelectedFile>, String> {
     Ok(result)
 }
 
+#[tauri::command]
+fn toggle_devtools(_app: tauri::AppHandle) {
+    #[cfg(debug_assertions)]
+    {
+        if let Some(window) = _app.get_webview_window("main") {
+            if window.is_devtools_open() {
+                window.close_devtools();
+            } else {
+                window.open_devtools();
+            }
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_os::init())
         .invoke_handler(tauri::generate_handler![
             keychain_set,
             keychain_get,
             keychain_delete,
-            select_files
+            select_files,
+            toggle_devtools
         ])
-        .setup(|_app| Ok(()))
+        .setup(|app| {
+            let window = app
+                .get_webview_window("main")
+                .expect("main window should exist");
+
+            // macOS keeps native decorations so the overlay traffic lights stay
+            // functional; every other platform goes borderless for the custom bar.
+            #[cfg(not(target_os = "macos"))]
+            {
+                let _ = window.set_decorations(false);
+            }
+
+            let _ = window.show();
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -1,6 +1,7 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
 import "@workspace/ui/globals.css"
+import { invoke } from "@tauri-apps/api/core"
 import { openUrl } from "@tauri-apps/plugin-opener"
 import { App } from "./App"
 import { featureBuildInfo } from "./lib/features"
@@ -10,10 +11,6 @@ document.documentElement.dataset.theme = buildInfo.theme
 document.title = buildInfo.appName
 
 function disableMenu() {
-  if (import.meta.env.DEV) {
-    return
-  }
-
   document.addEventListener(
     "contextmenu",
     (event) => {
@@ -22,6 +19,15 @@ function disableMenu() {
     },
     { capture: true }
   )
+}
+
+function enableDevtoolsToggle() {
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "F12") {
+      event.preventDefault()
+      void invoke("toggle_devtools")
+    }
+  })
 }
 
 function openExternalLinksInBrowser() {
@@ -65,6 +71,7 @@ if (!documentRoot) {
 }
 
 disableMenu()
+enableDevtoolsToggle()
 openExternalLinksInBrowser()
 
 ReactDOM.createRoot(documentRoot).render(
