@@ -1,4 +1,4 @@
-:root[data-theme="mint"] {
+[data-theme="mint"]:is(:root, *) {
   --background: #f4faf6;
   --surface: #d6efe0;
   --muted: #a3d9be;
@@ -43,7 +43,7 @@
   --sidebar-ring: var(--accent-strong);
 }
 
-:root[data-theme="mint"].dark {
+[data-theme="mint"]:is(:root, *).dark {
   --background: #14302a;
   --foreground: #f4faf6;
 

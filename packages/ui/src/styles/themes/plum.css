@@ -1,4 +1,4 @@
-:root[data-theme="plum"] {
+[data-theme="plum"]:is(:root, *) {
   --background: #faf6f9;
   --surface: #ebd6e5;
   --muted: #ce9fc0;
@@ -43,7 +43,7 @@
   --sidebar-ring: var(--accent-strong);
 }
 
-:root[data-theme="plum"].dark {
+[data-theme="plum"]:is(:root, *).dark {
   --background: #2e1626;
   --foreground: #faf6f9;
 

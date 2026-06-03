@@ -1,4 +1,4 @@
-:root[data-theme="rose"] {
+[data-theme="rose"]:is(:root, *) {
   --background: #fbf7f7;
   --surface: #f5e3e3;
   --muted: #e9bcbc;
@@ -43,7 +43,7 @@
   --sidebar-ring: var(--accent-strong);
 }
 
-:root[data-theme="rose"].dark {
+[data-theme="rose"]:is(:root, *).dark {
   --background: #2e1f1f;
   --foreground: #fbf7f7;
 

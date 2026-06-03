@@ -3,6 +3,7 @@ import {
   CreateDesktopBuildInputSchema,
   DesktopBuildListResponseSchema,
   DesktopBuildSchema,
+  DesktopLatestVersionResponseSchema,
 } from "@workspace/types"
 import { z } from "zod"
 import type { HelmApiRequestClient } from "../types"
@@ -17,6 +18,10 @@ export const createDesktopInstallerModule = ({
   list: () =>
     request("/api/desktop-installer/builds", {}, (value) =>
       DesktopBuildListResponseSchema.parse(value)
+    ),
+  latestVersion: () =>
+    request("/api/desktop-installer/latest-version", {}, (value) =>
+      DesktopLatestVersionResponseSchema.parse(value)
     ),
   get: (id: string) =>
     request(`/api/desktop-installer/builds/${encodeId(id)}`, {}, (value) =>
