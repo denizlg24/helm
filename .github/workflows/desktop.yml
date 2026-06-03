@@ -68,3 +68,41 @@ jobs:
 
       - name: Tauri build
         run: bun --filter desktop tauri build
+
+  # Publishes a version-marker GitHub Release (tag `desktop-v{version}`) once the
+  # build passes on main. The API's update check reads the latest release tag to
+  # tell a user their installer is behind. Idempotent: skips if the tag exists,
+  # so a release only appears when tauri.conf.json's version is bumped.
+  release:
+    name: Publish version tag
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Read desktop version
+        id: version
+        run: |
+          VERSION=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "Could not read version from tauri.conf.json" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create release if new
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: desktop-v${{ steps.version.outputs.version }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; nothing to publish."
+            exit 0
+          fi
+          gh release create "$TAG" \
+            --title "Desktop $TAG" \
+            --notes "Desktop app version ${{ steps.version.outputs.version }}." \
+            --target "$GITHUB_SHA"

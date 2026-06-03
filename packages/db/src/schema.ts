@@ -212,7 +212,7 @@ export const workspaces = pgTable(
       .references(() => user.id, { onDelete: "restrict" }),
     displayName: text("display_name").notNull(),
     slug: text("slug").notNull(),
-    theme: text("theme").notNull().default("sky"),
+    theme: text("theme").notNull().default("default"),
     status: text("status").notNull().default("active"),
     onboardingCompletedAt: timestamp("onboarding_completed_at", {
       withTimezone: true,
@@ -442,6 +442,10 @@ export const desktopBuilds = pgTable(
     appName: text("app_name").notNull(),
     identifier: text("identifier"),
     theme: text("theme").notNull(),
+    // Latest published desktop version at the moment this build was dispatched.
+    // Compared against the current latest release to offer an in-place update.
+    // Null when no release existed yet at dispatch time.
+    appVersion: text("app_version"),
     features: jsonb("features").$type<string[]>().notNull().default([]),
     artifactsJson: jsonb("artifacts_json")
       .$type<

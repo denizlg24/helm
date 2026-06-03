@@ -47,6 +47,12 @@ export class DesktopInstallerController {
     return this.desktopInstallerService.create(authContext, input)
   }
 
+  @Get("latest-version")
+  @RequireWorkspace()
+  async latestVersion() {
+    return this.desktopInstallerService.getLatestVersion()
+  }
+
   @Get("builds/:id")
   @RequireWorkspace()
   async get(

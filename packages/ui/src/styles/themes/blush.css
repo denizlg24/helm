@@ -1,4 +1,4 @@
-:root[data-theme="blush"] {
+[data-theme="blush"]:is(:root, *) {
   --background: #fbf6f5;
   --surface: #f5d9d4;
   --muted: #eaaca5;
@@ -43,7 +43,7 @@
   --sidebar-ring: var(--accent-strong);
 }
 
-:root[data-theme="blush"].dark {
+[data-theme="blush"]:is(:root, *).dark {
   --background: #2e1816;
   --foreground: #fbf6f5;
 

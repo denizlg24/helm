@@ -78,28 +78,59 @@ const formatDate = (date: Date) =>
 const isPending = (status: DesktopBuildStatus) =>
   status === "queued" || status === "building"
 
+// Returns true when `latest` is a strictly higher semver than `built`. Missing
+// or malformed numeric parts are treated as 0, so "0.1" < "0.1.2".
+const isNewerVersion = (latest: string, built: string): boolean => {
+  const toParts = (value: string) =>
+    value.split(".").map((part) => Number.parseInt(part, 10) || 0)
+  const a = toParts(latest)
+  const b = toParts(built)
+  const length = Math.max(a.length, b.length)
+  for (let i = 0; i < length; i += 1) {
+    const left = a[i] ?? 0
+    const right = b[i] ?? 0
+    if (left !== right) {
+      return left > right
+    }
+  }
+  return false
+}
+
 export function DesktopInstallerSection() {
-  const [builds, setBuilds] = useState<DesktopBuild[] | null>(null)
+  const [currentBuild, setCurrentBuild] = useState<DesktopBuild | null>(null)
+  const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [appName, setAppName] = useState("Helm")
-  const [theme, setTheme] = useState<DesktopTheme>("sky")
+  const [theme, setTheme] = useState<DesktopTheme>("default")
   const [features, setFeatures] = useState<Set<string>>(new Set())
   const [enabledModuleIds, setEnabledModuleIds] = useState<string[] | null>(
     null
   )
   const [generating, setGenerating] = useState(false)
+  const [latestVersion, setLatestVersion] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Selections are restored from the existing installer exactly once, so polling
+  // and re-renders never clobber edits the user is making to the form.
+  const hydratedRef = useRef(false)
 
   const load = useCallback(async () => {
     try {
       const response = await apiClient.desktopInstaller.list()
-      setBuilds(response.builds)
+      const build = response.builds[0] ?? null
+      setCurrentBuild(build)
+      setLoaded(true)
       setError(null)
+      if (!hydratedRef.current && build) {
+        hydratedRef.current = true
+        setAppName(build.appName)
+        setTheme(build.theme)
+        setFeatures(new Set(build.features))
+      }
     } catch (loadError) {
       setError(
         loadError instanceof Error
           ? loadError.message
-          : "Could not load builds."
+          : "Could not load your installer."
       )
     }
   }, [])
@@ -107,6 +138,25 @@ export function DesktopInstallerSection() {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    let cancelled = false
+    apiClient.desktopInstaller
+      .latestVersion()
+      .then((response) => {
+        if (!cancelled) {
+          setLatestVersion(response.version)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLatestVersion(null)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // The features a build can include are the modules this workspace actually
   // has enabled (purchased + free defaults). Core modules are always baked in,
@@ -130,9 +180,9 @@ export function DesktopInstallerSection() {
     }
   }, [])
 
-  // Poll while any build is still being produced.
+  // Poll while the installer is still being produced.
   useEffect(() => {
-    const anyPending = builds?.some((build) => isPending(build.status)) ?? false
+    const anyPending = currentBuild ? isPending(currentBuild.status) : false
     if (!anyPending) {
       if (pollRef.current) {
         clearInterval(pollRef.current)
@@ -152,7 +202,7 @@ export function DesktopInstallerSection() {
         pollRef.current = null
       }
     }
-  }, [builds, load])
+  }, [currentBuild, load])
 
   const toggleFeature = useCallback((id: string) => {
     setFeatures((previous) => {
@@ -174,8 +224,10 @@ export function DesktopInstallerSection() {
         theme,
         features: [...features],
       })
-      setBuilds((previous) => [build, ...(previous ?? [])])
-      toast.success("Installer build started. It will appear below when ready.")
+      setCurrentBuild(build)
+      toast.success(
+        "Installer build started. Your download will appear here when ready."
+      )
     } catch (createError) {
       toast.error(
         createError instanceof Error
@@ -206,6 +258,14 @@ export function DesktopInstallerSection() {
       .filter((group) => groups.has(group))
       .map((group) => ({ group, modules: groups.get(group) ?? [] }))
   }, [enabledModuleIds])
+
+  // Only prompt to update a finished installer whose recorded version is behind
+  // the latest release — never mid-build.
+  const updateAvailable =
+    currentBuild?.status === "ready" &&
+    currentBuild.appVersion != null &&
+    latestVersion != null &&
+    isNewerVersion(latestVersion, currentBuild.appVersion)
 
   return (
     <div className="space-y-10">
@@ -258,15 +318,46 @@ export function DesktopInstallerSection() {
           disabled={generating}
           onClick={() => void handleGenerate()}
         >
-          {generating ? "Starting…" : "Generate installer"}
+          {generating
+            ? "Starting…"
+            : currentBuild
+              ? "Regenerate installer"
+              : "Generate installer"}
         </Button>
+        <p className="text-muted-foreground text-xs">
+          You can keep one installer at a time. Generating a new one replaces
+          the current download.
+        </p>
       </section>
 
       <section className="space-y-3">
         <h2 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-          Builds
+          Your installer
         </h2>
-        <BuildList builds={builds} error={error} onRetry={() => void load()} />
+        {updateAvailable && currentBuild?.appVersion && latestVersion ? (
+          <Alert>
+            <AlertDescription className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <span>
+                Update available — v{currentBuild.appVersion} → v{latestVersion}
+              </span>
+              <Button
+                aria-busy={generating}
+                className="ml-auto"
+                disabled={generating}
+                onClick={() => void handleGenerate()}
+                size="sm"
+              >
+                {generating ? "Starting…" : "Update"}
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        <CurrentInstaller
+          build={currentBuild}
+          error={error}
+          loaded={loaded}
+          onRetry={() => void load()}
+        />
       </section>
     </div>
   )
@@ -428,16 +519,18 @@ function Header() {
   )
 }
 
-function BuildList({
-  builds,
+function CurrentInstaller({
+  build,
   error,
+  loaded,
   onRetry,
 }: {
-  builds: DesktopBuild[] | null
+  build: DesktopBuild | null
   error: string | null
+  loaded: boolean
   onRetry: () => void
 }) {
-  if (error && !builds) {
+  if (error && !build) {
     return (
       <div className="space-y-3">
         <Alert variant="destructive">
@@ -450,28 +543,21 @@ function BuildList({
     )
   }
 
-  if (!builds) {
-    return (
-      <div className="space-y-3">
-        <Skeleton className="h-20 w-full" />
-        <Skeleton className="h-20 w-full" />
-      </div>
-    )
+  if (!loaded) {
+    return <Skeleton className="h-20 w-full" />
   }
 
-  if (builds.length === 0) {
+  if (!build) {
     return (
       <p className="text-muted-foreground text-sm">
-        No builds yet. Generate your first installer above.
+        No installer yet. Generate your first one above.
       </p>
     )
   }
 
   return (
-    <div className="divide-y divide-border border-border border-y">
-      {builds.map((build) => (
-        <BuildRow build={build} key={build.id} />
-      ))}
+    <div className="border-border border-y">
+      <BuildRow build={build} />
     </div>
   )
 }

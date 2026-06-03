@@ -1,4 +1,4 @@
-:root[data-theme="coral"] {
+[data-theme="coral"]:is(:root, *) {
   --background: #fbf6f3;
   --surface: #f5dccf;
   --muted: #eab59c;
@@ -43,7 +43,7 @@
   --sidebar-ring: var(--accent-strong);
 }
 
-:root[data-theme="coral"].dark {
+[data-theme="coral"]:is(:root, *).dark {
   --background: #2e1d14;
   --foreground: #fbf6f3;
 

@@ -951,6 +951,8 @@ export const DesktopBuildSchema = z.object({
   appName: z.string().min(1),
   identifier: z.string().nullable().optional(),
   theme: DesktopThemeSchema,
+  // Latest published desktop version at dispatch time; null when none existed.
+  appVersion: z.string().nullable().optional(),
   features: z.array(z.string().min(1)),
   artifacts: z.array(DesktopBuildArtifactSchema),
   error: z.string().nullable().optional(),
@@ -975,13 +977,20 @@ export const CreateDesktopBuildInputSchema = z.object({
       "Identifier must be a reverse-DNS style string"
     )
     .optional(),
-  theme: DesktopThemeSchema.default("sky"),
+  theme: DesktopThemeSchema.default("default"),
   // Empty array = full build with every feature included.
   features: z.array(z.string().min(1)).default([]),
 })
 
 export const DesktopBuildListResponseSchema = z.object({
   builds: z.array(DesktopBuildSchema),
+})
+
+// Latest desktop app version published as a GitHub Release, used by the console
+// to decide whether an installed/built version has an update available. Null
+// when the repo has no release yet.
+export const DesktopLatestVersionResponseSchema = z.object({
+  version: z.string().nullable(),
 })
 
 // Posted by the CI workflow once a platform's installers are built and
@@ -1004,6 +1013,9 @@ export type CreateDesktopBuildInput = z.infer<
 >
 export type DesktopBuildListResponse = z.infer<
   typeof DesktopBuildListResponseSchema
+>
+export type DesktopLatestVersionResponse = z.infer<
+  typeof DesktopLatestVersionResponseSchema
 >
 export type DesktopBuildCallbackInput = z.infer<
   typeof DesktopBuildCallbackInputSchema

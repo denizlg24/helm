@@ -1,4 +1,4 @@
-:root[data-theme="butter"] {
+[data-theme="butter"]:is(:root, *) {
   --background: #fbf9ee;
   --surface: #f3eeba;
   --muted: #dcd57a;
@@ -43,7 +43,7 @@
   --sidebar-ring: var(--accent-strong);
 }
 
-:root[data-theme="butter"].dark {
+[data-theme="butter"]:is(:root, *).dark {
   --background: #2a2812;
   --foreground: #fbf9ee;
 

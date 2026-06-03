@@ -6,7 +6,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from "@nestjs/common"
-import { and, db, desc, desktopBuilds, eq } from "@workspace/db"
+import { and, db, desc, desktopBuilds, eq, ne } from "@workspace/db"
 import {
   type AuthContext,
   type CreateDesktopBuildInput,
@@ -77,6 +77,14 @@ export class DesktopInstallerService {
     return toDesktopBuild(row)
   }
 
+  // Latest desktop version published as a GitHub Release (`desktop-v{semver}`),
+  // or null when the repo has no release yet. Surfaced to the console so it can
+  // compare against a build's stored appVersion and offer an update.
+  async getLatestVersion(): Promise<{ version: string | null }> {
+    const config = this.parseConfig()
+    return { version: await this.fetchLatestVersion(config) }
+  }
+
   async getBuildWorkspaceId(buildId: string): Promise<{ workspaceId: string }> {
     const [row] = await db
       .select({ workspaceId: desktopBuilds.workspaceId })
@@ -99,6 +107,10 @@ export class DesktopInstallerService {
     const id = crypto.randomUUID()
     const callbackToken = crypto.randomUUID()
     const now = new Date()
+    // Snapshot the version this installer is built against so we can later tell
+    // whether a newer release has shipped. Best-effort: a lookup failure just
+    // stores null (no update prompt) rather than blocking the build.
+    const appVersion = await this.fetchLatestVersion(config)
 
     const [row] = await db
       .insert(desktopBuilds)
@@ -111,6 +123,7 @@ export class DesktopInstallerService {
         appName: input.appName,
         identifier: input.identifier ?? null,
         theme: input.theme,
+        appVersion,
         features: input.features,
         artifactsJson: [],
         callbackToken,
@@ -153,6 +166,12 @@ export class DesktopInstallerService {
       .set({ status: "building", updatedAt: new Date() })
       .where(eq(desktopBuilds.id, id))
       .returning()
+
+    // A workspace+user keeps exactly one installer at a time. Now that the new
+    // build has been dispatched, drop every prior build and free its bytes from
+    // storage. Done after a successful dispatch so a failed dispatch leaves the
+    // previous working installer intact.
+    await this.purgePreviousBuilds(authContext, id)
 
     try {
       await this.auditService.write(authContext, {
@@ -307,6 +326,83 @@ export class DesktopInstallerService {
     })
   }
 
+  // Deletes every build for this workspace+user except `keepBuildId`, removing
+  // each one's uploaded artifacts from storage first. Best-effort: a storage
+  // delete failure is logged but never blocks the new build (the bytes can be
+  // reaped later; the row is still removed so the single-build invariant holds).
+  private async purgePreviousBuilds(
+    authContext: AuthContext,
+    keepBuildId: string
+  ): Promise<void> {
+    const stale = await db
+      .select()
+      .from(desktopBuilds)
+      .where(
+        and(
+          eq(desktopBuilds.workspaceId, authContext.workspaceId),
+          eq(desktopBuilds.userId, authContext.userId),
+          ne(desktopBuilds.id, keepBuildId)
+        )
+      )
+
+    if (stale.length === 0) {
+      return
+    }
+
+    const storage = this.tryParseArtifactProxyConfig()
+    if (storage) {
+      for (const row of stale) {
+        await this.deleteArtifactBytes(storage, row)
+      }
+    }
+
+    await db
+      .delete(desktopBuilds)
+      .where(
+        and(
+          eq(desktopBuilds.workspaceId, authContext.workspaceId),
+          eq(desktopBuilds.userId, authContext.userId),
+          ne(desktopBuilds.id, keepBuildId)
+        )
+      )
+  }
+
+  private async deleteArtifactBytes(
+    config: z.infer<typeof DesktopArtifactProxyEnvSchema>,
+    row: DesktopBuildRow
+  ): Promise<void> {
+    const storageBaseUrl = config.STORAGE_DENIZ_CLOUD_URL.replace(/\/$/, "")
+    for (const artifact of row.artifactsJson) {
+      const fileId = parseStorageFileId(artifact.downloadUrl, storageBaseUrl)
+      if (!fileId) {
+        continue
+      }
+      try {
+        const response = await fetch(
+          `${storageBaseUrl}/api/files/${encodeURIComponent(fileId)}`,
+          {
+            method: "DELETE",
+            headers: { "X-API-Key": config.STORAGE_DENIZ_CLOUD_API_KEY },
+          }
+        )
+        // 404 means the bytes are already gone — treat as success.
+        if (!response.ok && response.status !== 404) {
+          console.error("Failed to delete desktop installer artifact", {
+            buildId: row.id,
+            fileId,
+            status: response.status,
+          })
+        }
+      } catch (error) {
+        console.error("Errored deleting desktop installer artifact", {
+          error,
+          buildId: row.id,
+          fileId,
+        })
+      }
+    }
+  }
+
   private async findOwnedRow(
     authContext: AuthContext,
     buildId: string
@@ -347,6 +443,51 @@ export class DesktopInstallerService {
       )
     }
     return result.data
+  }
+
+  // Same config as parseArtifactProxyConfig but non-throwing: used by the
+  // best-effort purge so a server without storage configured still cleans up
+  // database rows without aborting a build.
+  private tryParseArtifactProxyConfig() {
+    const result = DesktopArtifactProxyEnvSchema.safeParse(process.env)
+    return result.success ? result.data : null
+  }
+
+  // Reads the repo's latest GitHub Release and returns its semver, stripping the
+  // `desktop-v` tag prefix. Returns null on any failure (no release, network,
+  // bad shape) so callers can degrade gracefully.
+  private async fetchLatestVersion(
+    config: z.infer<typeof GithubEnvSchema>
+  ): Promise<string | null> {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 10000)
+    try {
+      const response = await fetch(
+        `https://api.github.com/repos/${config.GITHUB_INSTALLER_REPO}/releases/latest`,
+        {
+          headers: {
+            Authorization: `Bearer ${config.GITHUB_INSTALLER_TOKEN}`,
+            Accept: "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+          },
+          signal: controller.signal,
+        }
+      )
+      if (!response.ok) {
+        return null
+      }
+      const body = (await response.json()) as { tag_name?: unknown }
+      const parsed = z.string().min(1).safeParse(body.tag_name)
+      if (!parsed.success) {
+        return null
+      }
+      return parsed.data.replace(/^desktop-v/u, "")
+    } catch (error) {
+      console.error("Failed to fetch latest desktop version", { error })
+      return null
+    } finally {
+      clearTimeout(timeoutId)
+    }
   }
 
   private async dispatchWorkflow(
@@ -409,6 +550,22 @@ export class DesktopInstallerService {
   }
 }
 
+// Extracts the deniz-cloud file id from a stored artifact download URL of the
+// form `${storageBaseUrl}/api/files/{id}/download`. Returns null when the URL
+// doesn't belong to the configured storage host, so we never issue deletes
+// against an unexpected origin.
+function parseStorageFileId(
+  downloadUrl: string,
+  storageBaseUrl: string
+): string | null {
+  if (!downloadUrl.startsWith(`${storageBaseUrl}/`)) {
+    return null
+  }
+  const match = downloadUrl.match(/\/api\/files\/([^/]+)\/download$/u)
+  const encodedId = match?.[1]
+  return encodedId ? decodeURIComponent(encodedId) : null
+}
+
 // Constant-time comparison so a caller can't probe the per-build token by
 // measuring response timing.
 function tokensMatch(expected: string, provided: string): boolean {
@@ -444,6 +601,7 @@ function toDesktopBuild(row: DesktopBuildRow): DesktopBuild {
     appName: row.appName,
     identifier: row.identifier,
     theme: row.theme,
+    appVersion: row.appVersion,
     features: row.features,
     artifacts: row.artifactsJson.map((artifact, index) => ({
       ...artifact,
