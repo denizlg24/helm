@@ -18,7 +18,7 @@ v1 closes the open questions from v0, locks the concrete repo decisions already 
 |---|---|
 | Desktop-only first release or web too? | Web and desktop ship together for MVP. Web covers signup, billing, workspace setup, onboarding. Desktop is the primary daily-use surface. |
 | AI usage model? | Platform-managed keys for MVP (user sets a monthly budget). BYOK comes post-MVP. |
-| How much works offline? | Desktop works offline for read and local operations (Pomodoro, local embeddings, cached data). Write mutations queue and sync when connectivity returns. Out of scope for MVP. |
+| How much works offline? | Desktop works offline for read and local operations (Pomodoro, cached data). Write mutations queue and sync when connectivity returns. Out of scope for MVP. |
 | Which modules are base vs Pro? | See billing table below — confirmed from v0. |
 | Publish: add-on or separate product? | Add-on. Same Next.js deployment, tenant-scoped routes, isolated data layer. |
 | Export formats per module? | JSON (all), Markdown (notes, journal, posts), CSV (kanban, spreadsheets, people). Zip bundle for full workspace export. |
@@ -56,7 +56,7 @@ helm/                          ← repo root (Turborepo + bun workspaces)
 
 **`apps/marketing`** — fully public. No auth dependency. Can be deployed separately.
 
-**`apps/desktop`** — Vite + React frontend loaded by Tauri WebView. Same React components as `apps/web` where practical (via `packages/ui`). Desktop-only features (file dialogs, notifications, local embeddings, Pomodoro timer) implemented in Rust and exposed via Tauri commands. No Next.js inside Tauri.
+**`apps/desktop`** — Vite + React frontend loaded by Tauri WebView. Same React components as `apps/web` where practical (via `packages/ui`). Desktop-only features (file dialogs, notifications, Pomodoro timer) implemented in Rust and exposed via Tauri commands. No Next.js inside Tauri.
 
 ---
 
@@ -93,7 +93,7 @@ helm/                          ← repo root (Turborepo + bun workspaces)
 `Tenant`, `Workspace`, `User`, `WorkspaceMember`, `Subscription`, `Entitlement`, `ModuleConfig`, `DashboardLayout`, `AppInstall`, `ApiToken`, `IntegrationCredential`, `AuditLog`, `LlmUsage`
 
 **MongoDB (Mongoose)** — dashboard entities with flexible per-module schemas:
-`Conversation`, `Note`, `NoteGroup`, `NoteEdge`, `NoteEmbedding`, `SemanticRun`, `SemanticSuggestion`, `Whiteboard`, `Spreadsheet`, `KanbanBoard`, `KanbanColumn`, `KanbanCard`, `CalendarEvent`, `CalendarSettings`, `TimetableEntry`, `JournalEntry`, `Person`, `PersonGroup`, `PersonEdge`, `ContactSubmission`, `EmailAccount`, `Email`, `EmailTriage`, `TriageSettings`, `Resource`, `ResourceCapability`, `HealthCheckLog`, `ScheduledJob`, `PublishPost`, `PublishProject`, `PublishTimelineItem`, `PublishComment`
+`Conversation`, `Note`, `NoteGroup`, `NoteEdge`, `NoteSuggestion`, `NoteOrganizerRun`, `Whiteboard`, `Spreadsheet`, `KanbanBoard`, `KanbanColumn`, `KanbanCard`, `CalendarEvent`, `CalendarSettings`, `TimetableEntry`, `JournalEntry`, `Person`, `PersonGroup`, `PersonEdge`, `ContactSubmission`, `EmailAccount`, `Email`, `EmailTriage`, `TriageSettings`, `Resource`, `ResourceCapability`, `HealthCheckLog`, `ScheduledJob`, `PublishPost`, `PublishProject`, `PublishTimelineItem`, `PublishComment`
 
 All MongoDB documents carry `workspaceId` (required, indexed) and `tenantId` for isolation. No cross-workspace queries ever.
 
@@ -211,7 +211,6 @@ Rust core responsibilities:
 - OS keychain access (device token storage)
 - File dialogs and export destinations
 - Desktop notifications
-- Local embedding runtime (`fastembed-rs` or ONNX via Rust)
 - Pomodoro timer state (persists across app restarts)
 - App updates and version compatibility checks
 - Background sync indicator
@@ -230,7 +229,7 @@ Queue: BullMQ on Redis. One queue per job type.
 | `email-triage` | After email sync |
 | `calendar-sync` | Scheduled |
 | `reminder-generation` | Daily |
-| `semantic-run` | After note batch changes |
+| `note-organizer-run` | After note batch changes or user-triggered organize action |
 | `resource-health-check` | Scheduled per resource |
 | `scheduled-http-job` | User-defined cron |
 | `storage-cleanup` | Scheduled |
@@ -247,13 +246,19 @@ All jobs: idempotent, retryable, workspace-scoped, carry `tenantId + workspaceId
 | Plan | Modules included |
 |---|---|
 | **Starter** | Core, Notes, Kanban, Calendar, Timetable, Whiteboards, Pomodoro |
-| **Pro** | Starter + AI Assistant, Semantic Graph, People Graph, Inbox Triage, Resources, Spreadsheets, Journal |
+| **Pro** | Starter + AI Assistant, People Graph, Inbox Triage, Resources, Spreadsheets, Journal |
 | **Publish add-on** | Public site, Blog, Projects, Timeline, Comments, Contact form |
 | **Self-Hosted** | License-based, Pro features, manual ops |
 
 Entitlement dimensions: module access, AI monthly budget (token count), storage (GB), workspaces, members, desktop installs, email accounts, resources, scheduled jobs, export frequency.
 
 All plan checks go through the entitlement service — never inline in business logic.
+
+### Notes module decision
+
+The notes module includes both folder view and graph view. Folder view replaces the reference app's list view: note groups behave as folders, including nested folders. Graph view is not a separate module.
+
+The MVP does not implement embeddings, vector search, `NoteEmbedding`, or a separate semantic graph. Older "semantic" language should be read as LLM-assisted note organization: summaries, group/tag suggestions, and relationship suggestions. New code should use note organizer / note intelligence naming, not `Semantic*`, unless a future design introduces real embedding-backed semantic retrieval. See `docs/notes-module-decisions.md`.
 
 ---
 

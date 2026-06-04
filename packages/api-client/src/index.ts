@@ -13,6 +13,7 @@ import {
 } from "./modules/desktop-installer"
 import { createDevicesModule, type DevicesModule } from "./modules/devices"
 import { createFilesModule, type FilesModule } from "./modules/files"
+import { createNotesModule, type NotesModule } from "./modules/notes"
 import {
   createOnboardingModule,
   type OnboardingModule,
@@ -37,6 +38,7 @@ export interface HelmApiClient {
   billing: BillingModule
   onboarding: OnboardingModule
   assistant: AssistantModule
+  notes: NotesModule
   files: FilesModule
   usage: UsageModule
   desktopInstaller: DesktopInstallerModule
@@ -55,6 +57,7 @@ export const createHelmApiClient = (
     billing: createBillingModule(requestClient),
     onboarding: createOnboardingModule(requestClient),
     assistant: createAssistantModule(requestClient),
+    notes: createNotesModule(requestClient),
     files: createFilesModule(requestClient),
     usage: createUsageModule(requestClient),
     desktopInstaller: createDesktopInstallerModule(requestClient),

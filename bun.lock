@@ -253,6 +253,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@base-ui/react": "^1.5.0",
+        "@workspace/types": "workspace:*",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "cmdk": "^1.1.1",

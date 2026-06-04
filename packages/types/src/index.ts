@@ -855,6 +855,266 @@ export type ApproveAssistantToolInput = z.infer<
 >
 export type AssistantStreamEvent = z.infer<typeof AssistantStreamEventSchema>
 
+// --- Notes -----------------------------------------------------------------
+
+export const NoteStatusSchema = z.enum(["open", "archived", "deleted"])
+export const NoteSourceTypeSchema = z.enum(["manual", "url", "import"])
+export const NoteGroupKindSchema = z.enum(["manual", "generated", "system"])
+export const NoteSuggestionTypeSchema = z.enum([
+  "join-group",
+  "create-group",
+  "rename-group",
+  "move-group",
+  "add-tags",
+  "add-edge",
+  "archive-edge",
+  "summary",
+])
+export const NoteSuggestionStatusSchema = z.enum([
+  "pending",
+  "accepted",
+  "dismissed",
+  "superseded",
+])
+
+export const NoteSchema = z.object({
+  id: z.string().min(1),
+  tenantId: z.string().min(1),
+  workspaceId: z.string().min(1),
+  title: z.string(),
+  content: z.string(),
+  contentPlainText: z.string(),
+  contentHash: z.string().min(1),
+  sourceType: NoteSourceTypeSchema,
+  url: z.string().url().nullable(),
+  description: z.string().nullable(),
+  siteName: z.string().nullable(),
+  favicon: z.string().url().nullable(),
+  image: z.string().url().nullable(),
+  publishedAt: z.coerce.date().nullable(),
+  tags: z.array(z.string().min(1).max(64)),
+  groupIds: z.array(z.string().min(1)),
+  manualGroupIds: z.array(z.string().min(1)),
+  status: NoteStatusSchema,
+  class: z.string().nullable(),
+  summary: z.string().nullable(),
+  organizerStatus: z.enum(["idle", "pending", "organized", "failed"]),
+  organizerContentHash: z.string().nullable(),
+  organizerUpdatedAt: z.coerce.date().nullable(),
+  organizerError: z.string().nullable(),
+  revision: z.number().int().nonnegative(),
+  createdByUserId: z.string().min(1),
+  updatedByUserId: z.string().min(1),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+})
+
+export const NoteGroupSchema = z.object({
+  id: z.string().min(1),
+  tenantId: z.string().min(1),
+  workspaceId: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().nullable(),
+  color: z.string().nullable(),
+  parentId: z.string().min(1).nullable(),
+  kind: NoteGroupKindSchema,
+  source: z.enum(["user", "assistant", "organizer", "migration"]),
+  lockedByUser: z.boolean(),
+  confidence: z.number().min(0).max(1).nullable(),
+  aliases: z.array(z.string().min(1).max(80)),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+})
+
+export const NoteEdgeSchema = z.object({
+  id: z.string().min(1),
+  tenantId: z.string().min(1),
+  workspaceId: z.string().min(1),
+  fromNoteId: z.string().min(1),
+  toNoteId: z.string().min(1),
+  strength: z.number().min(0).max(1),
+  reason: z.string().nullable(),
+  source: z.enum(["manual", "assistant", "organizer", "migration"]),
+  runId: z.string().min(1).nullable(),
+  metadata: z.record(z.string(), z.unknown()),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+})
+
+export const NoteOrganizerRunSchema = z.object({
+  id: z.string().min(1),
+  tenantId: z.string().min(1),
+  workspaceId: z.string().min(1),
+  status: z.enum(["running", "completed", "failed"]),
+  initiatedBy: z.enum(["user", "job", "assistant"]),
+  noteCount: z.number().int().nonnegative(),
+  suggestionCount: z.number().int().nonnegative(),
+  startedAt: z.coerce.date(),
+  completedAt: z.coerce.date().nullable(),
+  error: z.string().nullable(),
+})
+
+export const NoteSuggestionSchema = z.object({
+  id: z.string().min(1),
+  tenantId: z.string().min(1),
+  workspaceId: z.string().min(1),
+  runId: z.string().min(1).nullable(),
+  type: NoteSuggestionTypeSchema,
+  status: NoteSuggestionStatusSchema,
+  noteId: z.string().min(1).nullable(),
+  groupId: z.string().min(1).nullable(),
+  targetGroupId: z.string().min(1).nullable(),
+  proposedParentId: z.string().min(1).nullable(),
+  proposedName: z.string().nullable(),
+  proposedDescription: z.string().nullable(),
+  proposedTags: z.array(z.string().min(1).max(64)),
+  proposedRelatedNoteIds: z.array(z.string().min(1)),
+  confidence: z.number().min(0).max(1),
+  reason: z.string(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+})
+
+const NoteTitleInputSchema = z.string().trim().min(1).max(240)
+const NoteContentInputSchema = z.string().max(500_000).default("")
+const NoteTagInputSchema = z
+  .array(z.string().trim().min(1).max(64))
+  .max(64)
+  .default([])
+const NoteGroupIdsInputSchema = z.array(z.string().min(1)).max(64).default([])
+
+export const CreateNoteInputSchema = z.object({
+  title: NoteTitleInputSchema.optional(),
+  content: NoteContentInputSchema.optional(),
+  url: z.string().url().optional(),
+  description: z.string().trim().max(1000).optional(),
+  class: z.string().trim().max(80).optional(),
+  tags: NoteTagInputSchema.optional(),
+  groupIds: NoteGroupIdsInputSchema.optional(),
+  status: z.enum(["open", "archived"]).default("open").optional(),
+  publishedAt: z.coerce.date().nullable().optional(),
+})
+
+export const UpdateNoteInputSchema = z
+  .object({
+    title: NoteTitleInputSchema.optional(),
+    content: NoteContentInputSchema.optional(),
+    url: z.string().url().nullable().optional(),
+    description: z.string().trim().max(1000).nullable().optional(),
+    siteName: z.string().trim().max(240).nullable().optional(),
+    favicon: z.string().url().nullable().optional(),
+    image: z.string().url().nullable().optional(),
+    publishedAt: z.coerce.date().nullable().optional(),
+    tags: NoteTagInputSchema.optional(),
+    groupIds: NoteGroupIdsInputSchema.optional(),
+    status: z.enum(["open", "archived"]).optional(),
+    class: z.string().trim().max(80).nullable().optional(),
+    summary: z.string().trim().max(2000).nullable().optional(),
+  })
+  .refine((input) => Object.keys(input).length > 0, {
+    message: "At least one note field must be provided",
+  })
+
+export const NotesQuerySchema = z.object({
+  q: z.string().trim().max(200).optional(),
+  groupId: z.string().min(1).optional(),
+  tag: z.string().trim().min(1).max(64).optional(),
+  status: z.enum(["open", "archived", "all"]).default("open").optional(),
+  sourceType: z
+    .enum(["manual", "url", "import", "all"])
+    .default("all")
+    .optional(),
+  sort: z
+    .enum([
+      "updated-desc",
+      "updated-asc",
+      "created-desc",
+      "created-asc",
+      "title-asc",
+      "title-desc",
+    ])
+    .default("updated-desc")
+    .optional(),
+})
+
+export const CreateNoteGroupInputSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(1000).optional(),
+  color: z.string().trim().max(40).optional(),
+  parentId: z.string().min(1).nullable().optional(),
+})
+
+export const UpdateNoteGroupInputSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    description: z.string().trim().max(1000).nullable().optional(),
+    color: z.string().trim().max(40).nullable().optional(),
+    parentId: z.string().min(1).nullable().optional(),
+    lockedByUser: z.boolean().optional(),
+    aliases: z.array(z.string().trim().min(1).max(80)).max(24).optional(),
+  })
+  .refine((input) => Object.keys(input).length > 0, {
+    message: "At least one group field must be provided",
+  })
+
+export const NoteFolderSchema = z.object({
+  group: NoteGroupSchema.nullable(),
+  noteCount: z.number().int().nonnegative(),
+  directNoteCount: z.number().int().nonnegative(),
+  children: z.array(z.string().min(1)),
+})
+
+export const NotesListResponseSchema = z.object({
+  notes: z.array(NoteSchema),
+})
+
+export const NoteDetailResponseSchema = z.object({
+  note: NoteSchema,
+})
+
+export const NotesGraphResponseSchema = z.object({
+  notes: z.array(NoteSchema),
+  groups: z.array(NoteGroupSchema),
+  edges: z.array(NoteEdgeSchema),
+})
+
+export const NotesFoldersResponseSchema = z.object({
+  groups: z.array(NoteGroupSchema),
+  folders: z.array(NoteFolderSchema),
+  ungroupedNoteCount: z.number().int().nonnegative(),
+})
+
+export const NoteGroupsResponseSchema = z.object({
+  groups: z.array(NoteGroupSchema),
+})
+
+export const NoteTagsResponseSchema = z.object({
+  tags: z.array(z.string()),
+})
+
+export type NoteStatus = z.infer<typeof NoteStatusSchema>
+export type NoteSourceType = z.infer<typeof NoteSourceTypeSchema>
+export type NoteGroupKind = z.infer<typeof NoteGroupKindSchema>
+export type NoteSuggestionType = z.infer<typeof NoteSuggestionTypeSchema>
+export type NoteSuggestionStatus = z.infer<typeof NoteSuggestionStatusSchema>
+export type Note = z.infer<typeof NoteSchema>
+export type NoteGroup = z.infer<typeof NoteGroupSchema>
+export type NoteEdge = z.infer<typeof NoteEdgeSchema>
+export type NoteSuggestion = z.infer<typeof NoteSuggestionSchema>
+export type NoteOrganizerRun = z.infer<typeof NoteOrganizerRunSchema>
+export type CreateNoteInput = z.infer<typeof CreateNoteInputSchema>
+export type UpdateNoteInput = z.infer<typeof UpdateNoteInputSchema>
+export type NotesQuery = z.infer<typeof NotesQuerySchema>
+export type CreateNoteGroupInput = z.infer<typeof CreateNoteGroupInputSchema>
+export type UpdateNoteGroupInput = z.infer<typeof UpdateNoteGroupInputSchema>
+export type NoteFolder = z.infer<typeof NoteFolderSchema>
+export type NotesListResponse = z.infer<typeof NotesListResponseSchema>
+export type NoteDetailResponse = z.infer<typeof NoteDetailResponseSchema>
+export type NotesGraphResponse = z.infer<typeof NotesGraphResponseSchema>
+export type NotesFoldersResponse = z.infer<typeof NotesFoldersResponseSchema>
+export type NoteGroupsResponse = z.infer<typeof NoteGroupsResponseSchema>
+export type NoteTagsResponse = z.infer<typeof NoteTagsResponseSchema>
+
 // --- Files / storage -------------------------------------------------------
 
 // A content-addressed blob. One per unique (workspaceId, sha256). `backendId`

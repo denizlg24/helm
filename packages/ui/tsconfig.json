@@ -3,6 +3,7 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
+      "@workspace/types": ["../types/src/index.ts"],
       "@workspace/ui/*": ["./src/*"]
     }
   },

@@ -10,8 +10,11 @@ import {
   AppHeader,
   type AppHeaderUser,
 } from "@workspace/ui/components/app-header"
+import { Button } from "@workspace/ui/components/button"
 import { Spinner } from "@workspace/ui/components/spinner"
 import { cn } from "@workspace/ui/lib/utils"
+import { NotesDashboard } from "@workspace/ui/notes/notes-dashboard"
+import { FileText, MessageSquare } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { apiClient, setApiToken, setApiWorkspaceId } from "../lib/api"
 import { WindowControls } from "./window-controls"
@@ -67,6 +70,7 @@ export function DesktopDashboard({
   user,
   onDisconnect,
 }: DesktopDashboardProps) {
+  const [surface, setSurface] = useState<"assistant" | "notes">("assistant")
   const [ready, setReady] = useState(false)
   const [conversations, setConversations] = useState<
     AssistantConversationSummary[]
@@ -93,6 +97,16 @@ export function DesktopDashboard({
       void refresh()
     },
   })
+
+  const resolveWorkspace = useCallback(async () => {
+    setApiToken(token)
+    const response = await apiClient.user.current()
+    setApiWorkspaceId(response.authContext.workspaceId)
+    setDisplayUser({
+      email: response.user.email ?? response.authContext.userEmail,
+      name: response.user.name ?? response.authContext.userName,
+    })
+  }, [token])
 
   useEffect(() => {
     setApiToken(token)
@@ -156,6 +170,32 @@ export function DesktopDashboard({
     )
   }
 
+  if (surface === "notes") {
+    return (
+      <NotesDashboard
+        client={apiClient}
+        headerClassName={isMac ? "pl-20" : undefined}
+        headerDragRegion
+        headerEndSlot={
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSurface("assistant")}
+            >
+              <MessageSquare className="size-3.5" />
+              Assistant
+            </Button>
+            <WindowControls />
+          </>
+        }
+        onResolveWorkspace={resolveWorkspace}
+        onSignOut={async () => onDisconnect()}
+        user={displayUser}
+      />
+    )
+  }
+
   return (
     <div className="flex h-svh w-full overflow-hidden bg-background">
       <aside
@@ -198,7 +238,19 @@ export function DesktopDashboard({
           onLogout={onDisconnect}
           backgroundItems={[]}
           notifications={[]}
-          endSlot={<WindowControls />}
+          endSlot={
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSurface("notes")}
+              >
+                <FileText className="size-3.5" />
+                Notes
+              </Button>
+              <WindowControls />
+            </>
+          }
         />
 
         <main className="min-h-0 flex-1">
