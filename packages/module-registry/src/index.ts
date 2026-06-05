@@ -1,4 +1,8 @@
-import { ApiScopeSchema } from "@workspace/types"
+import {
+  ApiScopeSchema,
+  type SettingsFieldDescriptor,
+  type SettingsGroupDescriptor,
+} from "@workspace/types"
 import { z } from "zod"
 
 export const ModuleGroupSchema = z.enum([
@@ -401,3 +405,45 @@ export const EXTRA_KEYWORDS: Record<string, string[]> = {
   triage: ["email", "review"],
   whiteboard: ["canvas", "drawing"],
 }
+
+// --- Settings registry -------------------------------------------------------
+// Declarative descriptors the shared settings UI renders. The "general" group
+// ships now; modules add their own groups/fields here as they implement
+// settings (e.g. a future desktop-only notes save directory with scope
+// "desktop"). The UI filters by the host platform via the `scope`/`platform`.
+
+export const settingsGroups = [
+  {
+    id: "general",
+    label: "General",
+    description: "Appearance and keyboard shortcuts.",
+    platform: "both",
+  },
+] as const satisfies readonly SettingsGroupDescriptor[]
+
+export const settingsFields = [
+  {
+    key: "appearance.mode",
+    label: "Theme",
+    description: "Match your system, or force light or dark.",
+    group: "general",
+    scope: "both",
+    control: "theme-mode",
+  },
+  {
+    key: "shortcuts.commandPalette",
+    label: "Command palette",
+    description: "Open the command palette.",
+    group: "general",
+    scope: "both",
+    control: "shortcut",
+  },
+  {
+    key: "shortcuts.toggleTheme",
+    label: "Toggle light / dark",
+    description: "Switch between light and dark mode.",
+    group: "general",
+    scope: "both",
+    control: "shortcut",
+  },
+] as const satisfies readonly SettingsFieldDescriptor[]

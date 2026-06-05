@@ -4,11 +4,13 @@ import "@workspace/ui/globals.css"
 import { invoke } from "@tauri-apps/api/core"
 import { openUrl } from "@tauri-apps/plugin-opener"
 import { App } from "./App"
+import { applyCachedAppearanceSnapshot } from "./lib/appearance"
 import { featureBuildInfo } from "./lib/features"
 
 const buildInfo = featureBuildInfo()
 document.documentElement.dataset.theme = buildInfo.theme
 document.title = buildInfo.appName
+applyCachedAppearanceSnapshot()
 
 function disableMenu() {
   document.addEventListener(

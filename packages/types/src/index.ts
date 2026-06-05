@@ -103,6 +103,75 @@ export const CurrentWorkspaceResponseSchema = z.object({
   entitlements: z.record(z.string(), z.unknown()),
 })
 
+// --- User settings -----------------------------------------------------------
+// Per-user UI preferences synced across web + desktop. Distinct from
+// ModuleConfig (workspace-level admin config); these are the signed-in user's
+// own preferences. Device-local settings (e.g. a desktop save directory) live
+// on the device and are never sent here.
+
+export const AppearanceModeSchema = z.enum(["light", "dark", "system"])
+
+// A keyboard shortcut binding in normalized form: lowercase tokens joined by
+// "+", modifiers first, "mod" meaning Cmd on macOS / Ctrl elsewhere.
+// e.g. "mod+p", "mod+shift+l", "d".
+export const ShortcutBindingSchema = z
+  .string()
+  .min(1)
+  .regex(/^[a-z0-9]+(\+[a-z0-9]+)*$/u, "Expected '+'-joined shortcut tokens")
+
+export const AppearanceSettingsSchema = z.object({
+  mode: AppearanceModeSchema.default("system"),
+})
+
+export const ShortcutSettingsSchema = z.object({
+  commandPalette: ShortcutBindingSchema.default("mod+p"),
+  toggleTheme: ShortcutBindingSchema.default("d"),
+})
+
+export const UserSettingsSchema = z.object({
+  appearance: AppearanceSettingsSchema.default({ mode: "system" }),
+  shortcuts: ShortcutSettingsSchema.default({
+    commandPalette: "mod+p",
+    toggleTheme: "d",
+  }),
+  // Per-module user preferences keyed by module id. Each module validates its
+  // own slice when it declares fields; opaque here.
+  modules: z.record(z.string(), z.record(z.string(), z.unknown())).default({}),
+})
+
+export const UpdateUserSettingsInputSchema = z.object({
+  appearance: AppearanceSettingsSchema.partial().optional(),
+  shortcuts: ShortcutSettingsSchema.partial().optional(),
+  modules: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+})
+
+export const UserSettingsResponseSchema = z.object({
+  settings: UserSettingsSchema,
+})
+
+// Declarative settings field/group descriptors used to render the settings UI.
+// Field/group data lives in packages/module-registry; the UI iterates these.
+export const SettingsScopeSchema = z.enum(["both", "web", "desktop"])
+export const SettingsControlSchema = z.enum(["theme-mode", "shortcut"])
+
+export const SettingsFieldDescriptorSchema = z.object({
+  // Dot path into UserSettings, e.g. "appearance.mode" or "shortcuts.commandPalette".
+  key: z.string().min(1),
+  label: z.string().min(1),
+  description: z.string().optional(),
+  // Group id this field belongs to ("general" or a moduleId).
+  group: z.string().min(1),
+  scope: SettingsScopeSchema.default("both"),
+  control: SettingsControlSchema,
+})
+
+export const SettingsGroupDescriptorSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  description: z.string().optional(),
+  platform: SettingsScopeSchema.default("both"),
+})
+
 export const CreateWorkspaceInputSchema = z.object({
   displayName: z.string().min(1).max(120),
   slug: z
@@ -1281,3 +1350,20 @@ export type DesktopBuildCallbackInput = z.infer<
   typeof DesktopBuildCallbackInputSchema
 >
 export type UploadFileMetadata = z.infer<typeof UploadFileMetadataSchema>
+export type AppearanceMode = z.infer<typeof AppearanceModeSchema>
+export type ShortcutBinding = z.infer<typeof ShortcutBindingSchema>
+export type AppearanceSettings = z.infer<typeof AppearanceSettingsSchema>
+export type ShortcutSettings = z.infer<typeof ShortcutSettingsSchema>
+export type UserSettings = z.infer<typeof UserSettingsSchema>
+export type UpdateUserSettingsInput = z.infer<
+  typeof UpdateUserSettingsInputSchema
+>
+export type UserSettingsResponse = z.infer<typeof UserSettingsResponseSchema>
+export type SettingsScope = z.infer<typeof SettingsScopeSchema>
+export type SettingsControl = z.infer<typeof SettingsControlSchema>
+export type SettingsFieldDescriptor = z.infer<
+  typeof SettingsFieldDescriptorSchema
+>
+export type SettingsGroupDescriptor = z.infer<
+  typeof SettingsGroupDescriptorSchema
+>

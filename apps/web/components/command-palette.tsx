@@ -4,8 +4,8 @@ import {
   EXTRA_KEYWORDS,
   GROUP_LABELS,
   MODULE_ICONS,
-  ROUTE_OVERRIDES,
   moduleDefinitions,
+  ROUTE_OVERRIDES,
 } from "@workspace/module-registry"
 import type { CommandPaletteEntry } from "@workspace/ui/components/command-palette-overlay"
 import { CommandPaletteOverlay } from "@workspace/ui/components/command-palette-overlay"
@@ -35,6 +35,7 @@ import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 import { apiClient } from "../lib/api"
 import { authClient } from "../lib/auth-client"
+import { useSettings } from "./settings/settings-provider"
 
 const ICON_MAP: Record<string, LucideIcon> = {
   AlarmClock,
@@ -61,6 +62,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
 export function CommandPalette() {
   const router = useRouter()
   const { data: session } = authClient.useSession()
+  const { settings } = useSettings()
   const [enabledModules, setEnabledModules] = useState<Set<string>>(new Set())
 
   useEffect(() => {
@@ -90,7 +92,7 @@ export function CommandPalette() {
       moduleDefinitions.map((definition) => {
         const group = GROUP_LABELS[definition.group] ?? definition.group
         const iconName = MODULE_ICONS[definition.id]
-        const icon = iconName ? ICON_MAP[iconName] ?? HomeIcon : HomeIcon
+        const icon = iconName ? (ICON_MAP[iconName] ?? HomeIcon) : HomeIcon
         return {
           disabled: !enabledModules.has(definition.id),
           group,
@@ -113,6 +115,7 @@ export function CommandPalette() {
   return (
     <CommandPaletteOverlay
       entries={entries}
+      shortcut={settings.shortcuts.commandPalette}
       onSelect={(entry) => {
         if (entry.href) router.push(entry.href)
       }}

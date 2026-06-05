@@ -15,6 +15,7 @@ import { EntitlementGuard } from "./entitlement.guard"
 import { HelmAuthController } from "./helm-auth.controller"
 import { ModuleGuard } from "./module.guard"
 import { ScopeGuard } from "./scope.guard"
+import { SettingsService } from "./settings.service"
 import { WorkspaceGuard } from "./workspace.guard"
 
 @Module({
@@ -30,6 +31,7 @@ import { WorkspaceGuard } from "./workspace.guard"
     AuthContextService,
     ApiTokenService,
     DeviceService,
+    SettingsService,
     { provide: APP_GUARD, useClass: WorkspaceGuard },
     { provide: APP_GUARD, useClass: RateLimitGuard },
     { provide: APP_GUARD, useClass: ScopeGuard },

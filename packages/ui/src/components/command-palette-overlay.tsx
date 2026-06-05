@@ -7,6 +7,7 @@ import {
   CommandItem,
   CommandList,
 } from "@workspace/ui/components/command"
+import { matchShortcut } from "@workspace/ui/lib/shortcuts"
 import { cn } from "@workspace/ui/lib/utils"
 import { Command as CommandPrimitive } from "cmdk"
 import type { LucideIcon } from "lucide-react"
@@ -29,6 +30,8 @@ export interface CommandPaletteOverlayProps {
   onSelect: (entry: CommandPaletteEntry) => void
   placeholder?: string
   title?: string
+  // Normalized shortcut binding that toggles the palette. Defaults to "mod+p".
+  shortcut?: string
 }
 
 function normalizeSearchText(value: string) {
@@ -100,13 +103,14 @@ export function CommandPaletteOverlay({
   onSelect,
   placeholder = "Search pages...",
   title = "Navigation",
+  shortcut = "mod+p",
 }: CommandPaletteOverlayProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState("")
 
   useEffect(() => {
     const handleKeydown = (event: KeyboardEvent) => {
-      if (event.key === "p" && (event.metaKey || event.ctrlKey)) {
+      if (matchShortcut(event, shortcut)) {
         event.preventDefault()
         setOpen((current) => !current)
       }
@@ -114,7 +118,7 @@ export function CommandPaletteOverlay({
 
     window.addEventListener("keydown", handleKeydown)
     return () => window.removeEventListener("keydown", handleKeydown)
-  }, [])
+  }, [shortcut])
 
   const groupedEntries = useMemo(() => {
     const groups = new Map<string, CommandPaletteEntry[]>()
