@@ -12,6 +12,7 @@ import {
   CreateApiTokenInputSchema,
   RevokeDeviceInputSchema,
   UpdateApiTokenInputSchema,
+  UpdateUserSettingsInputSchema,
 } from "@workspace/types"
 import { z } from "zod"
 // biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
@@ -24,13 +25,16 @@ import {
 } from "./auth.decorators"
 // biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
 import { DeviceService } from "./device.service"
+// biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
+import { SettingsService } from "./settings.service"
 
 @Controller("api")
 @RequireWorkspace()
 export class HelmAuthController {
   constructor(
     private readonly apiTokenService: ApiTokenService,
-    private readonly deviceService: DeviceService
+    private readonly deviceService: DeviceService,
+    private readonly settingsService: SettingsService
   ) {}
 
   @Get("me")
@@ -40,6 +44,24 @@ export class HelmAuthController {
         id: authContext.userId,
       },
       authContext,
+    }
+  }
+
+  // Self-scoped: a user always reads/writes their own preferences, so no extra
+  // scope is required beyond an authenticated workspace session.
+  @Get("me/settings")
+  async settings(@CurrentAuthContext() authContext: AuthContext) {
+    return { settings: await this.settingsService.get(authContext.userId) }
+  }
+
+  @Patch("me/settings")
+  async updateSettings(
+    @CurrentAuthContext() authContext: AuthContext,
+    @Body() body: unknown
+  ) {
+    const input = UpdateUserSettingsInputSchema.parse(body)
+    return {
+      settings: await this.settingsService.update(authContext.userId, input),
     }
   }
 

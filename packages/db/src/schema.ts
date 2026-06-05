@@ -30,6 +30,20 @@ export const user = pgTable("user", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
 })
 
+// Per-user UI preferences synced across web + desktop (appearance, shortcuts,
+// per-module prefs). One row per user. Device-local settings are not stored
+// here. See packages/types UserSettingsSchema for the shape.
+export const userSettings = pgTable("user_settings", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  settingsJson: jsonb("settings_json")
+    .$type<Record<string, unknown>>()
+    .notNull()
+    .default({}),
+  ...timestamps,
+})
+
 export const session = pgTable(
   "session",
   {

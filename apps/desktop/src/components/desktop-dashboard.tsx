@@ -10,8 +10,14 @@ import {
   GROUP_LABELS,
   MODULE_ICONS,
   moduleDefinitions,
+  settingsFields,
+  settingsGroups,
 } from "@workspace/module-registry"
-import type { AssistantConversationSummary } from "@workspace/types"
+import {
+  type AssistantConversationSummary,
+  type UserSettings,
+  UserSettingsSchema,
+} from "@workspace/types"
 import {
   AppHeader,
   type AppHeaderUser,
@@ -22,10 +28,14 @@ import {
   CommandPaletteOverlay,
 } from "@workspace/ui/components/command-palette-overlay"
 import { Spinner } from "@workspace/ui/components/spinner"
+import { buildSettingsUpdate } from "@workspace/ui/lib/settings"
+import { matchShortcut } from "@workspace/ui/lib/shortcuts"
 import { cn } from "@workspace/ui/lib/utils"
+import { SettingsView } from "@workspace/ui/settings/settings-view"
 import type { LucideIcon } from "lucide-react"
 import {
   AlarmClock,
+  ArrowLeft,
   Bot,
   Brain,
   Calendar,
@@ -54,9 +64,16 @@ import {
   useState,
 } from "react"
 import { apiClient, setApiToken, setApiWorkspaceId } from "../lib/api"
+import {
+  applyAppearanceMode,
+  cacheAppearanceMode,
+  isDarkActive,
+} from "../lib/appearance"
 import { featureGatedImport } from "../lib/feature-gated-import"
 import { isFeatureEnabled } from "../lib/features"
 import { WindowControls } from "./window-controls"
+
+const DEFAULT_SETTINGS = UserSettingsSchema.parse({})
 
 interface NativeSelectedFile {
   name: string
@@ -144,7 +161,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   UsersRound,
 }
 
-const DESKTOP_SURFACES = new Set(["assistant", "home", "notes"])
+const DESKTOP_SURFACES = new Set(["assistant", "home", "notes", "settings"])
 
 export interface DesktopDashboardProps {
   token: string
@@ -157,8 +174,11 @@ export function DesktopDashboard({
   user,
   onDisconnect,
 }: DesktopDashboardProps) {
-  const [surface, setSurface] = useState<"assistant" | "notes">("assistant")
+  const [surface, setSurface] = useState<"assistant" | "notes" | "settings">(
+    "assistant"
+  )
   const [ready, setReady] = useState(false)
+  const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS)
   const [conversations, setConversations] = useState<
     AssistantConversationSummary[]
   >([])
@@ -238,10 +258,91 @@ export function DesktopDashboard({
     if (ready) void refresh()
   }, [ready, refresh])
 
+  useEffect(() => {
+    if (!ready) {
+      return
+    }
+    let cancelled = false
+    apiClient.user
+      .settings()
+      .then((response) => {
+        if (!cancelled) {
+          cacheAppearanceMode(response.settings.appearance.mode)
+          setSettings(response.settings)
+        }
+      })
+      .catch(() => {
+        // Non-fatal — fall back to defaults.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [ready])
+
+  // Server settings are the source of truth for the active light/dark mode.
+  useEffect(
+    () => applyAppearanceMode(settings.appearance.mode),
+    [settings.appearance.mode]
+  )
+
+  const updateSetting = useCallback(
+    (key: string, value: unknown) => {
+      const previous = settings
+      const previousMode = previous.appearance.mode
+      const { settings: next, patch } = buildSettingsUpdate(
+        settings,
+        key,
+        value
+      )
+      setSettings(next)
+      cacheAppearanceMode(next.appearance.mode)
+      apiClient.user
+        .updateSettings(patch)
+        .then((response) => {
+          cacheAppearanceMode(response.settings.appearance.mode)
+          setSettings(response.settings)
+        })
+        .catch((error) => {
+          console.error("Failed to save settings:", error)
+          setSettings(previous)
+          cacheAppearanceMode(previousMode)
+        })
+    },
+    [settings]
+  )
+
+  useEffect(() => {
+    const handleKeydown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.repeat) {
+        return
+      }
+      const target = event.target
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT")
+      ) {
+        return
+      }
+      if (!matchShortcut(event, settings.shortcuts.toggleTheme)) {
+        return
+      }
+      event.preventDefault()
+      updateSetting("appearance.mode", isDarkActive() ? "light" : "dark")
+    }
+
+    window.addEventListener("keydown", handleKeydown)
+    return () => window.removeEventListener("keydown", handleKeydown)
+  }, [settings.shortcuts.toggleTheme, updateSetting])
+
   const commandEntries = useMemo<CommandPaletteEntry[]>(
     () =>
       moduleDefinitions.map((definition) => {
-        const bundled = isFeatureEnabled(definition.id)
+        // Settings is a core surface that ships in every build.
+        const bundled =
+          definition.id === "settings" || isFeatureEnabled(definition.id)
         const implemented = DESKTOP_SURFACES.has(definition.id)
         const enabled = enabledModules.has(definition.id)
         const group = GROUP_LABELS[definition.group] ?? definition.group
@@ -279,6 +380,16 @@ export function DesktopDashboard({
     [chat, refresh]
   )
 
+  const handleCommandSelect = useCallback((entry: CommandPaletteEntry) => {
+    if (entry.id === "notes") {
+      setSurface("notes")
+    } else if (entry.id === "settings") {
+      setSurface("settings")
+    } else {
+      setSurface("assistant")
+    }
+  }, [])
+
   const handleRename = useCallback(async (id: string, title: string) => {
     try {
       const updated = await apiClient.assistant.renameConversation(id, {
@@ -298,6 +409,48 @@ export function DesktopDashboard({
     )
   }
 
+  if (surface === "settings") {
+    return (
+      <div className="flex h-svh w-full flex-col overflow-hidden bg-background">
+        <CommandPaletteOverlay
+          entries={commandEntries}
+          shortcut={settings.shortcuts.commandPalette}
+          onSelect={handleCommandSelect}
+        />
+        <header
+          data-tauri-drag-region
+          className={cn(
+            "flex h-12 shrink-0 items-center gap-2 border-border border-b px-3",
+            isMac && "pl-20"
+          )}
+        >
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Back"
+            onClick={() => setSurface("assistant")}
+          >
+            <ArrowLeft className="size-4" />
+          </Button>
+          <span className="font-medium text-sm">Settings</span>
+          <div className="ml-auto">
+            <WindowControls />
+          </div>
+        </header>
+        <main className="min-h-0 flex-1 overflow-y-auto px-4 py-8">
+          <SettingsView
+            groups={settingsGroups}
+            fields={settingsFields}
+            values={settings}
+            platform="desktop"
+            onChange={updateSetting}
+          />
+        </main>
+      </div>
+    )
+  }
+
   if (surface === "notes") {
     return (
       <Suspense
@@ -309,10 +462,8 @@ export function DesktopDashboard({
       >
         <CommandPaletteOverlay
           entries={commandEntries}
-          onSelect={(entry) => {
-            if (entry.id === "notes") setSurface("notes")
-            else setSurface("assistant")
-          }}
+          shortcut={settings.shortcuts.commandPalette}
+          onSelect={handleCommandSelect}
         />
         <NotesDashboard
           client={apiClient}
@@ -331,10 +482,8 @@ export function DesktopDashboard({
     <div className="flex h-svh w-full overflow-hidden bg-background">
       <CommandPaletteOverlay
         entries={commandEntries}
-        onSelect={(entry) => {
-          if (entry.id === "notes") setSurface("notes")
-          else setSurface("assistant")
-        }}
+        shortcut={settings.shortcuts.commandPalette}
+        onSelect={handleCommandSelect}
       />
       <aside
         aria-hidden={!sidebarOpen}

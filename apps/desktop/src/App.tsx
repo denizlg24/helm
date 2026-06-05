@@ -1,10 +1,13 @@
 import { openUrl } from "@tauri-apps/plugin-opener"
+import { platform } from "@tauri-apps/plugin-os"
 import { createHelmApiClient, ForbiddenError } from "@workspace/api-client"
 import { AuthHeader, Wordmark } from "@workspace/ui/components/auth-shell"
 import { Button } from "@workspace/ui/components/button"
 import { Spinner } from "@workspace/ui/components/spinner"
+import { cn } from "@workspace/ui/lib/utils"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { DesktopDashboard } from "./components/desktop-dashboard"
+import { WindowControls } from "./components/window-controls"
 import { createDesktopAuthClient } from "./lib/auth-client"
 import { keychain } from "./lib/keychain"
 
@@ -65,6 +68,7 @@ export function App() {
   const pollRef = useRef<number | null>(null)
   const tokenRef = useRef<string | null>(null)
   const pollingRef = useRef(false)
+  const [isMac] = useState(() => platform() === "macos")
 
   const stopPolling = useCallback(() => {
     if (pollRef.current !== null) {
@@ -225,120 +229,129 @@ export function App() {
   }
 
   return (
-    <main className="flex min-h-svh items-center justify-center px-6 py-12">
-      <div className="w-full max-w-sm">
-        <Wordmark className="mb-8" />
-
-        {status.kind === "needs-onboarding" ? (
-          <>
-            <AuthHeader
-              description="This device is linked to your account, but you haven't set up a workspace yet. Finish onboarding on the console, then check again."
-              title="Finish setting up"
-              wordmark={false}
-            />
-            <div className="flex flex-col gap-2">
+    <div className="flex h-svh w-full flex-col overflow-hidden bg-background text-foreground">
+      <header
+        data-tauri-drag-region
+        className={cn(
+          "flex h-12 shrink-0 items-center gap-2 border-border border-b px-3",
+          isMac && "pl-20"
+        )}
+      >
+        <Wordmark />
+        <div className="ml-auto self-stretch">
+          <WindowControls />
+        </div>
+      </header>
+      <main className="flex min-h-0 flex-1 items-center justify-center px-6 py-12">
+        <div className="w-full max-w-sm">
+          {status.kind === "needs-onboarding" ? (
+            <>
+              <AuthHeader
+                description="This device is linked to your account, but you haven't set up a workspace yet. Finish onboarding on the console, then check again."
+                title="Finish setting up"
+                wordmark={false}
+              />
+              <div className="flex flex-col gap-2">
+                <Button
+                  className="w-full"
+                  onClick={() => void openUrl(ONBOARDING_URL)}
+                  size="lg"
+                  type="button"
+                >
+                  Open console to finish setup
+                </Button>
+                <Button
+                  className="w-full"
+                  loading={rechecking}
+                  onClick={() => void recheck()}
+                  size="lg"
+                  type="button"
+                  variant="outline"
+                >
+                  I've finished — check again
+                </Button>
+                <Button
+                  className="w-full"
+                  onClick={() => void disconnect()}
+                  size="lg"
+                  type="button"
+                  variant="ghost"
+                >
+                  Disconnect
+                </Button>
+              </div>
+            </>
+          ) : status.kind === "activating" ? (
+            <>
+              <AuthHeader
+                description="Enter this code in your browser to approve this desktop device."
+                title="Activate device"
+                wordmark={false}
+              />
               <Button
-                className="w-full"
-                onClick={() => void openUrl(ONBOARDING_URL)}
-                size="lg"
-                type="button"
-              >
-                Open console to finish setup
-              </Button>
-              <Button
-                className="w-full"
-                loading={rechecking}
-                onClick={() => void recheck()}
+                className="mb-6 w-full min-w-0 justify-start px-3"
+                onClick={() => void openUrl(status.activation.verification_uri)}
                 size="lg"
                 type="button"
                 variant="outline"
               >
-                I've finished — check again
+                <span className="min-w-0 truncate font-mono text-xs">
+                  {status.activation.verification_uri}
+                </span>
               </Button>
+              <div className="flex justify-center gap-1.5">
+                {status.activation.user_code
+                  .split("")
+                  .map((char, index) => ({ char, id: index }))
+                  .map(({ char, id }) =>
+                    /[a-zA-Z0-9]/.test(char) ? (
+                      <span
+                        className="flex h-12 w-10 items-center justify-center rounded-md border border-border bg-secondary font-medium font-mono text-foreground text-xl uppercase"
+                        key={id}
+                      >
+                        {char}
+                      </span>
+                    ) : (
+                      <span
+                        className="flex items-center text-muted-foreground"
+                        key={id}
+                      >
+                        {char}
+                      </span>
+                    )
+                  )}
+              </div>
+              <p className="mt-6 flex items-center justify-center gap-2 text-muted-foreground text-sm">
+                <Spinner className="size-4" />
+                Waiting for approval…
+              </p>
+            </>
+          ) : (
+            <>
+              <AuthHeader
+                description="Activate this device by approving it on the console."
+                title="Activate this device"
+                wordmark={false}
+              />
               <Button
                 className="w-full"
-                onClick={() => void disconnect()}
+                loading={starting}
+                onClick={() => void activate()}
                 size="lg"
                 type="button"
-                variant="ghost"
               >
-                Disconnect
+                Activate device
               </Button>
-            </div>
-          </>
-        ) : status.kind === "activating" ? (
-          <>
-            <AuthHeader
-              description={
-                <>
-                  Enter this code at{" "}
-                  <a
-                    className="font-medium text-foreground underline underline-offset-4 hover:text-primary"
-                    href={status.activation.verification_uri}
-                    onClick={(event) => {
-                      event.preventDefault()
-                      void openUrl(status.activation.verification_uri)
-                    }}
-                  >
-                    {status.activation.verification_uri}
-                  </a>
-                </>
-              }
-              title="Activate device"
-              wordmark={false}
-            />
-            <div className="flex justify-center gap-1.5">
-              {status.activation.user_code
-                .split("")
-                .map((char, index) => ({ char, id: index }))
-                .map(({ char, id }) =>
-                  /[a-zA-Z0-9]/.test(char) ? (
-                    <span
-                      className="flex h-12 w-10 items-center justify-center rounded-md border border-border bg-secondary font-medium font-mono text-foreground text-xl uppercase"
-                      key={id}
-                    >
-                      {char}
-                    </span>
-                  ) : (
-                    <span
-                      className="flex items-center text-muted-foreground"
-                      key={id}
-                    >
-                      {char}
-                    </span>
-                  )
-                )}
-            </div>
-            <p className="mt-6 flex items-center justify-center gap-2 text-muted-foreground text-sm">
-              <Spinner className="size-4" />
-              Waiting for approval…
-            </p>
-          </>
-        ) : (
-          <>
-            <AuthHeader
-              description="Activate this device by approving it on the console."
-              title="Activate this device"
-              wordmark={false}
-            />
-            <Button
-              className="w-full"
-              loading={starting}
-              onClick={() => void activate()}
-              size="lg"
-              type="button"
-            >
-              Activate device
-            </Button>
-          </>
-        )}
+            </>
+          )}
 
-        {status.kind === "error" ? (
-          <p className="mt-6 text-destructive text-sm" role="alert">
-            {status.message}
-          </p>
-        ) : null}
-      </div>
-    </main>
+          {status.kind === "error" ? (
+            <p className="mt-6 text-destructive text-sm" role="alert">
+              {status.message}
+            </p>
+          ) : null}
+        </div>
+      </main>
+    </div>
   )
 }
