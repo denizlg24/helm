@@ -24,10 +24,48 @@ export class SettingsService {
     input: UpdateUserSettingsInput
   ): Promise<UserSettings> {
     const current = await this.get(userId)
+
+    // Deep merge modules: for each module, merge its nested fields
+    const mergedModules: Record<string, unknown> = {}
+    const allModuleKeys = new Set([
+      ...Object.keys(current.modules ?? {}),
+      ...Object.keys(input.modules ?? {}),
+    ])
+
+    for (const moduleKey of allModuleKeys) {
+      const currentModule = (current.modules as Record<string, unknown>)?.[
+        moduleKey
+      ]
+      const inputModule = (input.modules as Record<string, unknown>)?.[
+        moduleKey
+      ]
+
+      if (
+        inputModule &&
+        typeof inputModule === "object" &&
+        !Array.isArray(inputModule) &&
+        currentModule &&
+        typeof currentModule === "object" &&
+        !Array.isArray(currentModule)
+      ) {
+        // Both exist and are objects: deep merge
+        mergedModules[moduleKey] = {
+          ...(currentModule as Record<string, unknown>),
+          ...(inputModule as Record<string, unknown>),
+        }
+      } else if (inputModule !== undefined) {
+        // Input overwrites
+        mergedModules[moduleKey] = inputModule
+      } else {
+        // Preserve current
+        mergedModules[moduleKey] = currentModule
+      }
+    }
+
     const merged = UserSettingsSchema.parse({
       appearance: { ...current.appearance, ...input.appearance },
       shortcuts: { ...current.shortcuts, ...input.shortcuts },
-      modules: { ...current.modules, ...input.modules },
+      modules: mergedModules,
     })
 
     const now = new Date()

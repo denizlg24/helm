@@ -287,6 +287,8 @@ export function DesktopDashboard({
 
   const updateSetting = useCallback(
     (key: string, value: unknown) => {
+      const previous = settings
+      const previousMode = previous.appearance.mode
       const { settings: next, patch } = buildSettingsUpdate(
         settings,
         key,
@@ -302,6 +304,8 @@ export function DesktopDashboard({
         })
         .catch((error) => {
           console.error("Failed to save settings:", error)
+          setSettings(previous)
+          cacheAppearanceMode(previousMode)
         })
     },
     [settings]

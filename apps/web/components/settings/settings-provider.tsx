@@ -97,6 +97,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const updateSetting = useCallback(
     (key: string, value: unknown) => {
+      const prev = settings
       const { settings: next, patch } = buildSettingsUpdate(
         settings,
         key,
@@ -108,6 +109,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         .then((response) => setSettings(response.settings))
         .catch((error) => {
           console.error("Failed to save settings:", error)
+          setSettings(prev)
         })
     },
     [settings]

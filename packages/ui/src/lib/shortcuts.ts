@@ -82,12 +82,16 @@ export function matchShortcut(
   const wantCtrl = parsed.ctrl || (parsed.mod && !mac)
   const wantMeta = parsed.meta || (parsed.mod && mac)
 
+  // Normalize the event key: treat space the same way eventToBinding does
+  const eventKey = event.key.toLowerCase()
+  const normalizedEventKey = eventKey === " " ? "space" : eventKey
+
   return (
     event.ctrlKey === wantCtrl &&
     event.metaKey === wantMeta &&
     event.altKey === parsed.alt &&
     event.shiftKey === parsed.shift &&
-    event.key.toLowerCase() === parsed.key
+    normalizedEventKey === parsed.key
   )
 }
 

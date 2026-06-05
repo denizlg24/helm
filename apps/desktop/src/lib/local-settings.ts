@@ -26,5 +26,9 @@ export function getLocalSettings(): Record<string, unknown> {
 export function setLocalSetting(key: string, value: unknown): void {
   const next = read()
   next[key] = value
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+  } catch (error) {
+    console.error("Failed to write to localStorage:", error)
+  }
 }
