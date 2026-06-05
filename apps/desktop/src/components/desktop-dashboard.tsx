@@ -246,7 +246,7 @@ export function DesktopDashboard({
         const enabled = enabledModules.has(definition.id)
         const group = GROUP_LABELS[definition.group] ?? definition.group
         const iconName = MODULE_ICONS[definition.id]
-        const icon = iconName ? ICON_MAP[iconName] ?? HomeIcon : HomeIcon
+        const icon = iconName ? (ICON_MAP[iconName] ?? HomeIcon) : HomeIcon
 
         return {
           disabled: !enabled || !bundled || !implemented,
@@ -376,20 +376,7 @@ export function DesktopDashboard({
           onLogout={onDisconnect}
           backgroundItems={[]}
           notifications={[]}
-          endSlot={
-            <>
-              <Button
-                disabled={!notesAvailable}
-                variant="ghost"
-                size="sm"
-                onClick={() => setSurface("notes")}
-              >
-                <FileText className="size-3.5" />
-                Notes
-              </Button>
-              <WindowControls />
-            </>
-          }
+          endSlot={<WindowControls />}
         />
 
         <main className="min-h-0 flex-1">
