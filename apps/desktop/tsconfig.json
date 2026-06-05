@@ -16,6 +16,7 @@
     "strict": true,
     "paths": {
       "@/*": ["./src/*"],
+      "@workspace/types": ["../../packages/types/src/index.ts"],
       "@workspace/ui/*": ["../../packages/ui/src/*"]
     }
   },

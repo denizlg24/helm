@@ -1,3 +1,4 @@
+@import "https://fonts.googleapis.com/css2?family=Calistoga&display=swap";
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -18,6 +19,7 @@
 @source "../**/*.{ts,tsx}";
 
 :root {
+  --font-calistooga: "Calistoga", serif;
   --background: oklch(0.9793 0.0029 84.5589);
   --foreground: oklch(47.245% 0.02213 145.327);
   --card: oklch(0.9575 0.0251 111.745);
@@ -130,6 +132,8 @@
 }
 
 @theme inline {
+  --font-calistooga: var(--font-calistooga);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -314,4 +318,29 @@
 .hljs-deletion {
   color: #d4a373;
   background-color: rgba(212, 163, 115, 0.15);
+}
+
+/* Markdown editor multi-cursor / find overlay */
+.editor-overlay {
+  font-variant-ligatures: none;
+  scrollbar-width: none;
+}
+
+.editor-overlay::-webkit-scrollbar {
+  display: none;
+}
+
+.editor-cursor {
+  display: inline-block;
+  position: relative;
+  z-index: 1;
+  width: 0;
+  border-left: 2px solid var(--foreground);
+  margin-left: -1px;
+  height: 1.1em;
+  vertical-align: text-bottom;
+}
+
+.editor-overlay.cursors-hidden .editor-cursor {
+  opacity: 0;
 }

@@ -63,37 +63,37 @@ const staticComponents = {
 
   h1: ({ node, ...props }) => (
     <h1
-      className="mt-[36px] mb-[8px] font-bold font-sans text-[26px] text-foreground lowercase leading-[1.1] tracking-[-0.022em] sm:mt-[40px] sm:text-[32px] md:mt-[44px] md:text-[38px]"
+      className="mt-[36px] mb-[8px] font-bold font-calistooga text-[26px] text-foreground lowercase leading-[1.1] tracking-[-0.022em] sm:mt-[40px] sm:text-[32px] md:mt-[44px] md:text-[38px]"
       {...props}
     />
   ),
   h2: ({ node, ...props }) => (
     <h2
-      className="mt-[28px] mb-[8px] font-bold font-sans text-[22px] text-foreground lowercase leading-[1.15] tracking-[-0.022em] sm:mt-[32px] sm:text-[26px] md:mt-[36px] md:text-[30px]"
+      className="mt-[28px] mb-[8px] font-bold font-calistooga text-[22px] text-foreground lowercase leading-[1.15] tracking-[-0.022em] sm:mt-[32px] sm:text-[26px] md:mt-[36px] md:text-[30px]"
       {...props}
     />
   ),
   h3: ({ node, ...props }) => (
     <h3
-      className="mt-[24px] mb-[8px] font-bold font-sans text-[19px] text-foreground lowercase leading-[1.2] tracking-[-0.019em] sm:mt-[26px] sm:text-[22px] md:mt-[28px] md:text-[26px]"
+      className="mt-[24px] mb-[8px] font-bold font-calistooga text-[19px] text-foreground lowercase leading-[1.2] tracking-[-0.019em] sm:mt-[26px] sm:text-[22px] md:mt-[28px] md:text-[26px]"
       {...props}
     />
   ),
   h4: ({ node, ...props }) => (
     <h4
-      className="mt-[18px] mb-[8px] font-bold font-sans text-[17px] text-foreground lowercase leading-[1.22] tracking-[-0.015em] sm:mt-[20px] sm:text-[19px] md:mt-[22px] md:text-[22px]"
+      className="mt-[18px] mb-[8px] font-bold font-calistooga text-[17px] text-foreground lowercase leading-[1.22] tracking-[-0.015em] sm:mt-[20px] sm:text-[19px] md:mt-[22px] md:text-[22px]"
       {...props}
     />
   ),
   h5: ({ node, ...props }) => (
     <h5
-      className="mt-[16px] mb-[8px] font-sans font-semibold text-[16px] text-foreground lowercase leading-[1.25] tracking-[-0.012em] sm:mt-[17px] sm:text-[17px] md:mt-[18px] md:text-[18px]"
+      className="mt-[16px] mb-[8px] font-calistooga font-semibold text-[16px] text-foreground lowercase leading-[1.25] tracking-[-0.012em] sm:mt-[17px] sm:text-[17px] md:mt-[18px] md:text-[18px]"
       {...props}
     />
   ),
   h6: ({ node, ...props }) => (
     <h6
-      className="mt-[14px] mb-[8px] font-sans font-semibold text-[15px] text-foreground lowercase leading-[1.3] tracking-[-0.01em] sm:mt-[14px] sm:text-[15px] md:mt-[16px] md:text-[16px]"
+      className="mt-[14px] mb-[8px] font-calistooga font-semibold text-[15px] text-foreground lowercase leading-[1.3] tracking-[-0.01em] sm:mt-[14px] sm:text-[15px] md:mt-[16px] md:text-[16px]"
       {...props}
     />
   ),

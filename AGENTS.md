@@ -10,6 +10,7 @@ Helm is a **customer-customizable personal life dashboard** — a private person
 
 Full product spec: `docs/design-doc-v1.md` (read this if you need depth on any area).
 Original concept doc: `docs/Helm — Design Spec (v0).md`
+Notes module decisions: `docs/notes-module-decisions.md` (read before implementing notes).
 
 ---
 
@@ -21,7 +22,7 @@ apps/web          Next.js 16 — authenticated module dashboard (daily use)
 apps/console      Next.js 16 — account, billing, workspace setup, onboarding
 apps/marketing    Next.js 16 — public marketing site (no auth dependency)
 apps/desktop      Tauri 2 + Vite + React — primary desktop surface
-  └─ src-tauri    Rust core (keychain, file dialogs, notifications, embeddings, Pomodoro)
+  └─ src-tauri    Rust core (keychain, file dialogs, notifications, Pomodoro)
 
 packages/types          Zod schemas + inferred TS types for all entities (source of truth)
 packages/db             Drizzle ORM + Postgres schema (product-level entities only)
@@ -64,7 +65,7 @@ packages/typescript-config Shared TS configs (base, nextjs, react-library)
 
 ### Desktop
 - The Tauri frontend is **Vite + React**, not Next.js. Do not add Next.js to the desktop app.
-- Rust handles: keychain, file dialogs, desktop notifications, local embeddings, Pomodoro timer state, app updates.
+- Rust handles: keychain, file dialogs, desktop notifications, Pomodoro timer state, app updates.
 - React frontend uses `packages/api-client` for all server calls.
 - No manual API-key pasting during device setup. Activation is browser OAuth or device-code flow.
 
@@ -121,7 +122,7 @@ Single-user workspace. Starter + Pro modules. Desktop activation. Configurable h
 | Group | Modules |
 |---|---|
 | Core | Home dashboard, Settings, AI Assistant, LLM usage, API tokens, Data export |
-| Knowledge | Notes, Knowledge graph, Whiteboards, Spreadsheets |
+| Knowledge | Notes (folder view + graph view), Whiteboards, Spreadsheets |
 | Work | Kanban, Calendar, Timetable, Journal, Pomodoro |
 | Relationships | People, Person groups, Reminders |
 | Communications | IMAP inbox, Email triage |
@@ -135,6 +136,7 @@ Single-user workspace. Starter + Pro modules. Desktop activation. Configurable h
 | Task area | Read first |
 |---|---|
 | Any feature work | `docs/design-doc-v1.md` relevant section |
+| Notes module | `docs/notes-module-decisions.md`, then reference app notes screens if needed |
 | API endpoint | `apps/api/src/app.module.ts`, relevant service/controller |
 | DB schema | `packages/db/src/schema.ts` |
 | Types/validation | `packages/types/src/index.ts` |

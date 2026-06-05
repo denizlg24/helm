@@ -2,6 +2,7 @@
 const nextConfig = {
   transpilePackages: [
     "@workspace/auth",
+    "@workspace/module-registry",
     "@workspace/ui",
     "@workspace/api-client",
     "@workspace/assistant",
