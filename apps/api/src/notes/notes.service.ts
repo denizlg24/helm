@@ -15,13 +15,15 @@ import type {
   UpdateNoteGroupInput,
   UpdateNoteInput,
 } from "@workspace/types"
-import type { AuditService } from "../audit/audit.service"
+// biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
+import { AuditService } from "../audit/audit.service"
 import type {
   NoteDocument,
   NoteEdgeDocument,
   NoteGroupDocument,
-  NotesRepository,
 } from "./notes.repository"
+// biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
+import { NotesRepository } from "./notes.repository"
 
 const URL_IMPORT_MAX_BYTES = 512_000
 const URL_IMPORT_TIMEOUT_MS = 8_000
