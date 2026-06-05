@@ -115,9 +115,13 @@ export function NoteDetail({
   const titleSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
+    if (titleSaveTimer.current) {
+      clearTimeout(titleSaveTimer.current)
+      titleSaveTimer.current = null
+    }
     setTitle(note.title)
     setInitialTitle(note.title)
-  }, [note.title])
+  }, [note.title, note.id])
 
   const saveTitle = useCallback(
     async (nextTitle: string) => {
@@ -213,7 +217,13 @@ export function NoteDetail({
           <Input
             value={title}
             onChange={(event) => scheduleTitleSave(event.target.value)}
-            onBlur={() => void saveTitle(title)}
+            onBlur={() => {
+              if (titleSaveTimer.current) {
+                clearTimeout(titleSaveTimer.current)
+                titleSaveTimer.current = null
+              }
+              void saveTitle(title)
+            }}
             className="h-auto! border-none bg-transparent! px-0 py-1 font-semibold text-2xl shadow-none focus-visible:ring-0"
             placeholder="Untitled note"
           />

@@ -80,7 +80,7 @@ function computeMatches(
       const idx = searchIn.indexOf(searchFor, pos)
       if (idx === -1) break
       matches.push({ start: idx, end: idx + searchFor.length })
-      pos = idx + 1
+      pos = idx + searchFor.length
     }
   }
 

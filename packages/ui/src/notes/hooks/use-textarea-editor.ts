@@ -82,7 +82,7 @@ function findAllOccurrences(text: string, word: string): MultiSelection[] {
     const idx = text.indexOf(word, pos)
     if (idx === -1) break
     results.push({ start: idx, end: idx + word.length })
-    pos = idx + 1
+    pos = idx + word.length
   }
   return results
 }

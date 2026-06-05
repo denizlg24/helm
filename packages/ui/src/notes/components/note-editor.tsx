@@ -83,6 +83,7 @@ export function NoteEditor({
   const previousNoteIdRef = useRef(note.id)
   const contentTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
+  const editorRef = useRef<HTMLDivElement>(null)
   const {
     onKeyDown: editorOnKeyDown,
     multiSelections,
@@ -162,6 +163,9 @@ export function NoteEditor({
   }, [showOverlay, multiSelections])
 
   useEffect(() => {
+    const editorElement = editorRef.current
+    if (!editorElement) return
+
     const handleKeyDown = (e: KeyboardEvent) => {
       const shortcutKey = e.key.toLowerCase()
       if (
@@ -176,8 +180,8 @@ export function NoteEditor({
         openFind(shortcutKey === "h")
       }
     }
-    window.addEventListener("keydown", handleKeyDown, true)
-    return () => window.removeEventListener("keydown", handleKeyDown, true)
+    editorElement.addEventListener("keydown", handleKeyDown, true)
+    return () => editorElement.removeEventListener("keydown", handleKeyDown, true)
   }, [openFind, togglePreview])
 
   const onKeyDown = useCallback(
@@ -275,6 +279,7 @@ export function NoteEditor({
   return (
     <TooltipProvider>
       <div
+        ref={editorRef}
         className="relative flex min-h-0 w-full flex-1 flex-col"
         onKeyDownCapture={onKeyDownCapture}
       >

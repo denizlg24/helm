@@ -69,7 +69,7 @@ export function GroupDetail({
   useEffect(() => {
     setName(group.name)
     setDescription(group.description || "")
-  }, [group.name, group.description])
+  }, [group.id, group.name, group.description])
 
   const parentOptions = useMemo(() => {
     const forbidden = descendantIds(group.id, groups)

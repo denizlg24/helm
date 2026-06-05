@@ -345,3 +345,59 @@ export const defaultEnabledModuleIds = [
 
 // Back-compat alias
 export const coreMvpModuleIds = defaultEnabledModuleIds
+
+// UI metadata for command palette and module navigation
+export const GROUP_LABELS: Record<string, string> = {
+  communications: "Communications",
+  core: "Core",
+  infrastructure: "Infrastructure",
+  knowledge: "Knowledge",
+  publish: "Publish",
+  relationships: "Relationships",
+  work: "Work",
+}
+
+export const MODULE_ICONS: Record<string, string> = {
+  "api-tokens": "KeyRound",
+  assistant: "Bot",
+  blog: "NotebookPen",
+  calendar: "Calendar",
+  comments: "MessageCircle",
+  "contact-form": "UserSquare",
+  "data-export": "Download",
+  home: "HomeIcon",
+  "imap-inbox": "Inbox",
+  journal: "NotebookPen",
+  kanban: "Kanban",
+  "llm-usage": "Brain",
+  notes: "FileText",
+  now: "HomeIcon",
+  people: "UsersRound",
+  pomodoro: "AlarmClock",
+  projects: "FolderGit2",
+  resources: "Radio",
+  settings: "Settings",
+  spreadsheets: "Table",
+  timetable: "Calendar",
+  timeline: "FolderGit2",
+  triage: "Brain",
+  whiteboard: "PenTool",
+}
+
+export const ROUTE_OVERRIDES: Record<string, string> = {
+  assistant: "/",
+  home: "/",
+}
+
+export const EXTRA_KEYWORDS: Record<string, string[]> = {
+  "api-tokens": ["token", "keys", "developer"],
+  assistant: ["ai", "chat", "dashboard"],
+  "data-export": ["download", "backup"],
+  "imap-inbox": ["mail", "email"],
+  "llm-usage": ["usage", "billing", "credits"],
+  people: ["contacts", "crm", "relationships"],
+  pomodoro: ["timer", "focus"],
+  resources: ["infrastructure", "servers", "health"],
+  triage: ["email", "review"],
+  whiteboard: ["canvas", "drawing"],
+}

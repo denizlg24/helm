@@ -81,10 +81,19 @@ export function buildDescendantIdMap<TGroup extends GroupLike>(
 ) {
   const childrenByParent = buildChildrenByParent(groups)
   const descendantIdsByGroup = new Map<string, Set<string>>()
+  const visiting = new Set<string>()
 
   const collect = (groupId: string): Set<string> => {
     const cached = descendantIdsByGroup.get(groupId)
     if (cached) return cached
+
+    if (visiting.has(groupId)) {
+      const placeholder = new Set<string>([groupId])
+      descendantIdsByGroup.set(groupId, placeholder)
+      return placeholder
+    }
+
+    visiting.add(groupId)
 
     const next = new Set<string>([groupId])
     for (const child of childrenByParent.get(groupId) ?? []) {
@@ -94,6 +103,7 @@ export function buildDescendantIdMap<TGroup extends GroupLike>(
     }
 
     descendantIdsByGroup.set(groupId, next)
+    visiting.delete(groupId)
     return next
   }
 

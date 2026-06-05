@@ -74,10 +74,17 @@ export function GroupTreeCombobox({
 
   const visibility = useMemo(() => {
     const visible = new Map<string, boolean>()
+    const visiting = new Set<string>()
 
     const isVisible = (groupId: string): boolean => {
       const cached = visible.get(groupId)
       if (cached !== undefined) return cached
+
+      if (visiting.has(groupId)) {
+        return false
+      }
+
+      visiting.add(groupId)
 
       const pathLabel = pathLabelById.get(groupId)?.toLowerCase() ?? ""
       const selfMatches =
@@ -92,6 +99,7 @@ export function GroupTreeCombobox({
 
       const next = selfMatches || descendantMatches
       visible.set(groupId, next)
+      visiting.delete(groupId)
       return next
     }
 
@@ -133,13 +141,16 @@ export function GroupTreeCombobox({
     if (!name) return
 
     setCreating(true)
-    const group = await onCreateGroup(name)
-    setCreating(false)
-    if (!group) return
+    try {
+      const group = await onCreateGroup(name)
+      if (!group) return
 
-    onChange(unique([...value, group.id]))
-    setQuery("")
-    setOpen(false)
+      onChange(unique([...value, group.id]))
+      setQuery("")
+      setOpen(false)
+    } finally {
+      setCreating(false)
+    }
   }
 
   const renderNode = (group: GroupLike, depth: number): React.ReactNode => {

@@ -32,8 +32,8 @@ export function NoteGraph({
   onSelectNote,
   onSelectGroup,
 }: Props) {
+  const scheme = themeScheme()
   const data = useMemo(() => {
-    const scheme = themeScheme()
     const visibleItemIds = new Set(notes.map((note) => note.id))
     const directMemberCount = new Map<string, number>()
 
@@ -165,7 +165,7 @@ export function NoteGraph({
     }
 
     return { nodes, links }
-  }, [notes, groups, edges])
+  }, [notes, groups, edges, scheme])
 
   return (
     <KnowledgeGraph
