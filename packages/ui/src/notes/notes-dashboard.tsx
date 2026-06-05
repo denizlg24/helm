@@ -6,62 +6,85 @@ import type {
   Note,
   NoteEdge,
   NoteGroup,
-  NotesFoldersResponse,
   NotesGraphResponse,
-  NotesQuery,
+  NoteTagsResponse,
+  UpdateNoteGroupInput,
   UpdateNoteInput,
 } from "@workspace/types"
 import {
-  ArrowLeft,
-  Download,
-  ExternalLink,
   FilePlus2,
   FileText,
-  Folder,
   FolderPlus,
-  GitBranch,
-  Globe,
+  FolderTree,
   LayoutGrid,
-  ListTree,
+  Link2,
+  Loader2,
   RefreshCcw,
-  Save,
-  Search,
-  Trash2,
+  Tags,
+  X,
 } from "lucide-react"
 import {
   type ReactNode,
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react"
 import type { AppHeaderUser } from "../components/app-header"
 import { AppHeader } from "../components/app-header"
-import { Badge } from "../components/badge"
 import { Button } from "../components/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../components/dialog"
 import { Input } from "../components/input"
-import { MarkdownRenderer } from "../components/markdown-renderer"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/select"
 import { toast } from "../components/sonner"
 import { Spinner } from "../components/spinner"
 import { Tabs, TabsList, TabsTrigger } from "../components/tabs"
-import { Textarea } from "../components/textarea"
-import { cn } from "../lib/utils"
+import { FolderExplorer } from "./components/folder-explorer"
+import { GroupDetail } from "./components/group-detail"
+import { GroupTreeCombobox } from "./components/group-tree-combobox"
+import { NoteDetail } from "./components/note-detail"
+import { NoteGraph } from "./components/note-graph"
+import { TagAutocomplete } from "./components/tag-autocomplete"
+import { buildDescendantIdMap, buildPathLabelMap } from "./lib/note-group-tree"
 
-type ViewMode = "folders" | "graph"
-type EditorMode = "write" | "preview"
-type StatusFilter = NonNullable<NotesQuery["status"]>
-type FolderSelection = "all" | "ungrouped" | string
+type View = "graph" | "folders"
+type Sort =
+  | "updated-desc"
+  | "updated-asc"
+  | "created-desc"
+  | "created-asc"
+  | "title-asc"
+  | "title-desc"
+type HasUrlFilter = "all" | "with-url" | "without-url"
+type StatusFilter = "all" | "open" | "archived"
 
 export interface NotesClient {
   notes: {
     graph: () => Promise<NotesGraphResponse>
-    folders: () => Promise<NotesFoldersResponse>
+    tags: () => Promise<NoteTagsResponse>
     create: (input: CreateNoteInput) => Promise<{ note: Note }>
     update: (id: string, input: UpdateNoteInput) => Promise<{ note: Note }>
     delete: (id: string) => Promise<{ id: string }>
     groups: {
       create: (input: CreateNoteGroupInput) => Promise<{ group: NoteGroup }>
+      update: (
+        id: string,
+        input: UpdateNoteGroupInput
+      ) => Promise<{ group: NoteGroup }>
+      delete: (id: string) => Promise<{ id: string }>
     }
   }
 }
@@ -77,83 +100,130 @@ export interface NotesDashboardProps {
   headerTitle?: string
 }
 
-interface GroupNode extends NoteGroup {
-  children: GroupNode[]
-}
-
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback
 
-const isHttpUrl = (value: string) => {
+function parseHttpUrl(text: string) {
+  const trimmed = text.trim()
+  if (!trimmed || /\s/.test(trimmed)) return null
   try {
-    const url = new URL(value.trim())
-    return url.protocol === "http:" || url.protocol === "https:"
+    const url = new URL(trimmed)
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      return url.toString()
+    }
   } catch {
-    return false
+    return null
   }
+  return null
 }
 
-const formatDate = (value: Date | string) =>
-  new Date(value).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
+function isEditablePasteTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false
+  if (target.isContentEditable) return true
+  return Boolean(
+    target.closest(
+      "input, textarea, [contenteditable='true'], [role='textbox']"
+    )
+  )
+}
+
+function sortNotes(notes: Note[], sort: Sort) {
+  const items = [...notes]
+  items.sort((left, right) => {
+    switch (sort) {
+      case "updated-asc":
+        return (
+          new Date(left.updatedAt).getTime() -
+          new Date(right.updatedAt).getTime()
+        )
+      case "created-desc":
+        return (
+          new Date(right.createdAt).getTime() -
+          new Date(left.createdAt).getTime()
+        )
+      case "created-asc":
+        return (
+          new Date(left.createdAt).getTime() -
+          new Date(right.createdAt).getTime()
+        )
+      case "title-asc":
+        return left.title.localeCompare(right.title)
+      case "title-desc":
+        return right.title.localeCompare(left.title)
+      default:
+        return (
+          new Date(right.updatedAt).getTime() -
+          new Date(left.updatedAt).getTime()
+        )
+    }
   })
-
-const safeHostname = (url: string | null) => {
-  if (!url) return null
-  try {
-    return new URL(url).hostname
-  } catch {
-    return url
-  }
+  return items
 }
 
-const excerptFromNote = (note: Note) => {
-  const source = note.description?.trim() || note.contentPlainText
-  if (!source) return note.url ? safeHostname(note.url) : "Empty note"
-  return source.length > 180 ? `${source.slice(0, 180).trim()}...` : source
+function matchesQuery(note: Note, query: string, groupSearchLabels: string[]) {
+  const normalized = query.trim().toLowerCase()
+  if (!normalized) return true
+  return [
+    note.title,
+    note.contentPlainText,
+    note.url,
+    note.description,
+    note.siteName,
+    note.class,
+    ...groupSearchLabels,
+    ...note.tags,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .some((value) => value.toLowerCase().includes(normalized))
 }
 
-const buildGroupTree = (groups: NoteGroup[]) => {
-  const byId = new Map<string, GroupNode>()
-  for (const group of groups) {
-    byId.set(group.id, { ...group, children: [] })
-  }
-  const roots: GroupNode[] = []
-  for (const group of byId.values()) {
-    if (group.parentId && byId.has(group.parentId)) {
-      byId.get(group.parentId)?.children.push(group)
-    } else {
-      roots.push(group)
+function collectVisibleGroups(notes: Note[], groups: NoteGroup[]) {
+  const byId = new Map(groups.map((group) => [group.id, group]))
+  const visible = new Set<string>()
+  for (const note of notes) {
+    for (const groupId of note.groupIds) {
+      let currentId: string | null | undefined = groupId
+      while (currentId) {
+        if (visible.has(currentId)) break
+        visible.add(currentId)
+        currentId = byId.get(currentId)?.parentId ?? null
+      }
     }
   }
-  const sortNodes = (nodes: GroupNode[]) => {
-    nodes.sort((left, right) => left.name.localeCompare(right.name))
-    for (const node of nodes) sortNodes(node.children)
-  }
-  sortNodes(roots)
-  return roots
+  return groups.filter((group) => visible.has(group.id))
 }
 
-const descendantIds = (groups: NoteGroup[], groupId: string) => {
-  const childrenByParent = new Map<string, NoteGroup[]>()
-  for (const group of groups) {
-    if (!group.parentId) continue
-    childrenByParent.set(group.parentId, [
-      ...(childrenByParent.get(group.parentId) ?? []),
-      group,
-    ])
-  }
-  const result = new Set<string>([groupId])
-  const stack = [...(childrenByParent.get(groupId) ?? [])]
-  while (stack.length > 0) {
-    const group = stack.pop()
-    if (!group || result.has(group.id)) continue
-    result.add(group.id)
-    stack.push(...(childrenByParent.get(group.id) ?? []))
-  }
-  return result
+function mergePatchedNote(current: Note, server: Note, input: UpdateNoteInput) {
+  return {
+    ...server,
+    title: input.title !== undefined ? server.title : current.title,
+    content: input.content !== undefined ? server.content : current.content,
+    contentPlainText:
+      input.content !== undefined
+        ? server.contentPlainText
+        : current.contentPlainText,
+    url: input.url !== undefined ? server.url : current.url,
+    description:
+      input.description !== undefined
+        ? server.description
+        : current.description,
+    siteName: input.siteName !== undefined ? server.siteName : current.siteName,
+    favicon: input.favicon !== undefined ? server.favicon : current.favicon,
+    image: input.image !== undefined ? server.image : current.image,
+    publishedAt:
+      input.publishedAt !== undefined
+        ? server.publishedAt
+        : current.publishedAt,
+    tags: input.tags !== undefined ? server.tags : current.tags,
+    groupIds: input.groupIds !== undefined ? server.groupIds : current.groupIds,
+    manualGroupIds:
+      input.groupIds !== undefined
+        ? server.manualGroupIds
+        : current.manualGroupIds,
+    status: input.status !== undefined ? server.status : current.status,
+    class: input.class !== undefined ? server.class : current.class,
+    summary: input.summary !== undefined ? server.summary : current.summary,
+  } satisfies Note
 }
 
 export function NotesDashboard({
@@ -169,28 +239,39 @@ export function NotesDashboard({
   const [ready, setReady] = useState(false)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [view, setView] = useState<ViewMode>("folders")
-  const [query, setQuery] = useState("")
-  const [status, setStatus] = useState<StatusFilter>("open")
-  const [folder, setFolder] = useState<FolderSelection>("all")
+  const [view, setView] = useState<View>("graph")
   const [notes, setNotes] = useState<Note[]>([])
   const [groups, setGroups] = useState<NoteGroup[]>([])
   const [edges, setEdges] = useState<NoteEdge[]>([])
+  const [tagSuggestions, setTagSuggestions] = useState<string[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [creatingUrl, setCreatingUrl] = useState(false)
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
+  const [folderId, setFolderId] = useState<string | null>(null)
+  const [query, setQuery] = useState("")
+  const [selectedGroupFilters, setSelectedGroupFilters] = useState<string[]>([])
+  const [selectedTagFilters, setSelectedTagFilters] = useState<string[]>([])
+  const [hasUrlFilter, setHasUrlFilter] = useState<HasUrlFilter>("all")
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
+  const [sort, setSort] = useState<Sort>("updated-desc")
+  const [importingLink, setImportingLink] = useState(false)
+  const [creatingNote, setCreatingNote] = useState(false)
+  const [groupDialogOpen, setGroupDialogOpen] = useState(false)
+  const [groupName, setGroupName] = useState("")
+  const [creatingGroup, setCreatingGroup] = useState(false)
 
   const load = useCallback(
     async (silent = false) => {
       if (silent) setRefreshing(true)
       else setLoading(true)
       try {
-        const [graphResult, folderResult] = await Promise.all([
+        const [graphResult, tagsResult] = await Promise.all([
           client.notes.graph(),
-          client.notes.folders(),
+          client.notes.tags(),
         ])
         setNotes(graphResult.notes)
-        setGroups(folderResult.groups)
+        setGroups(graphResult.groups)
         setEdges(graphResult.edges)
+        setTagSuggestions(tagsResult.tags)
       } catch (error) {
         toast.error(getErrorMessage(error, "Could not load notes"))
       } finally {
@@ -223,860 +304,656 @@ export function NotesDashboard({
   }, [ready, load])
 
   useEffect(() => {
-    const handlePaste = (event: ClipboardEvent) => {
-      const target = event.target
-      if (
-        target instanceof HTMLElement &&
-        target.closest("input, textarea, [contenteditable='true']")
-      ) {
-        return
-      }
-      const text = event.clipboardData?.getData("text") ?? ""
-      if (!isHttpUrl(text) || creatingUrl) return
-      event.preventDefault()
-      setCreatingUrl(true)
-      client.notes
-        .create({ url: text.trim() })
-        .then((response) => {
-          setSelectedId(response.note.id)
-          toast.success("Link imported")
-          return load(true)
-        })
-        .catch((error) => {
-          toast.error(getErrorMessage(error, "Could not import link"))
-        })
-        .finally(() => setCreatingUrl(false))
+    if (selectedId && !notes.some((note) => note.id === selectedId)) {
+      setSelectedId(null)
     }
-    window.addEventListener("paste", handlePaste)
-    return () => window.removeEventListener("paste", handlePaste)
-  }, [client, creatingUrl, load])
+  }, [notes, selectedId])
 
-  const groupTree = useMemo(() => buildGroupTree(groups), [groups])
-  const groupById = useMemo(
-    () => new Map(groups.map((group) => [group.id, group])),
-    [groups]
+  useEffect(() => {
+    if (
+      selectedGroupId &&
+      !groups.some((group) => group.id === selectedGroupId)
+    ) {
+      setSelectedGroupId(null)
+    }
+  }, [groups, selectedGroupId])
+
+  const applyUpdatedNote = useCallback((next: Note) => {
+    setNotes((current) =>
+      current.some((note) => note.id === next.id)
+        ? current.map((note) => (note.id === next.id ? next : note))
+        : [next, ...current]
+    )
+  }, [])
+
+  const handlePatchNote = useCallback(
+    async (id: string, body: UpdateNoteInput) => {
+      const snapshot = notes
+      setNotes((current) =>
+        current.map((note) => (note.id === id ? { ...note, ...body } : note))
+      )
+      try {
+        const { note } = await client.notes.update(id, body)
+        let mergedNote = note
+        setNotes((current) =>
+          current.some((currentNote) => currentNote.id === id)
+            ? current.map((currentNote) => {
+                if (currentNote.id !== id) return currentNote
+                mergedNote = mergePatchedNote(currentNote, note, body)
+                return mergedNote
+              })
+            : [note, ...current]
+        )
+        return mergedNote
+      } catch (error) {
+        toast.error(getErrorMessage(error, "Could not save note"))
+        const snapshotNote = snapshot.find((note) => note.id === id)
+        setNotes((current) =>
+          current.map((currentNote) =>
+            currentNote.id === id && snapshotNote
+              ? mergePatchedNote(currentNote, snapshotNote, body)
+              : currentNote
+          )
+        )
+        return null
+      }
+    },
+    [client, notes]
   )
 
-  const visibleNotes = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase()
-    const scope =
-      folder !== "all" && folder !== "ungrouped"
-        ? descendantIds(groups, folder)
-        : null
+  const handleDeleteNote = useCallback(
+    async (id: string) => {
+      const previousNotes = notes
+      const previousEdges = edges
+      setNotes((current) => current.filter((note) => note.id !== id))
+      setEdges((current) =>
+        current.filter((edge) => edge.fromNoteId !== id && edge.toNoteId !== id)
+      )
+      setSelectedId(null)
+      try {
+        await client.notes.delete(id)
+        toast.success("Note deleted")
+      } catch (error) {
+        toast.error(getErrorMessage(error, "Could not delete note"))
+        setNotes(previousNotes)
+        setEdges(previousEdges)
+      }
+    },
+    [client, edges, notes]
+  )
 
+  const handlePasteImport = useCallback(
+    async (url: string) => {
+      if (importingLink) return
+      setImportingLink(true)
+      const toastId = toast.loading("Importing link...")
+      try {
+        const { note } = await client.notes.create({ url })
+        applyUpdatedNote(note)
+        setSelectedGroupId(null)
+        setSelectedId(note.id)
+        setTagSuggestions((current) =>
+          [...new Set([...current, ...note.tags])].sort((left, right) =>
+            left.localeCompare(right)
+          )
+        )
+        toast.success("Link imported", { id: toastId })
+        void load(true)
+      } catch (error) {
+        toast.error(getErrorMessage(error, "Could not import link"), {
+          id: toastId,
+        })
+      } finally {
+        setImportingLink(false)
+      }
+    },
+    [applyUpdatedNote, client, importingLink, load]
+  )
+
+  const handleUpdateGroup = useCallback(
+    async (id: string, patch: UpdateNoteGroupInput) => {
+      const previousGroups = groups
+      setGroups((current) =>
+        current.map((group) =>
+          group.id === id ? { ...group, ...patch } : group
+        )
+      )
+      try {
+        const { group } = await client.notes.groups.update(id, patch)
+        setGroups((current) =>
+          current.map((current_group) =>
+            current_group.id === id ? group : current_group
+          )
+        )
+        if (patch.parentId !== undefined) await load(true)
+      } catch (error) {
+        toast.error(getErrorMessage(error, "Could not update group"))
+        setGroups(previousGroups)
+      }
+    },
+    [client, groups, load]
+  )
+
+  const handleDeleteGroup = useCallback(
+    async (id: string) => {
+      const previousGroups = groups
+      const previousNotes = notes
+      setGroups((current) => current.filter((group) => group.id !== id))
+      setNotes((current) =>
+        current.map((note) => ({
+          ...note,
+          groupIds: note.groupIds.filter((groupId) => groupId !== id),
+        }))
+      )
+      setSelectedGroupId(null)
+      try {
+        await client.notes.groups.delete(id)
+        toast.success("Group deleted")
+        await load(true)
+      } catch (error) {
+        toast.error(getErrorMessage(error, "Could not delete group"))
+        setGroups(previousGroups)
+        setNotes(previousNotes)
+      }
+    },
+    [client, groups, notes, load]
+  )
+
+  const createNote = async () => {
+    setCreatingNote(true)
+    try {
+      const inheritedGroupIds =
+        view === "folders" && folderId
+          ? [folderId]
+          : selectedGroupFilters.length > 0
+            ? selectedGroupFilters
+            : undefined
+      const { note } = await client.notes.create({
+        title: "Untitled note",
+        groupIds: inheritedGroupIds,
+      })
+      applyUpdatedNote(note)
+      setSelectedGroupId(null)
+      setSelectedId(note.id)
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Could not create note"))
+    } finally {
+      setCreatingNote(false)
+    }
+  }
+
+  const createGroup = async () => {
+    const name = groupName.trim()
+    if (!name) return
+    setCreatingGroup(true)
+    try {
+      const { group } = await client.notes.groups.create({
+        name,
+        parentId:
+          selectedGroupFilters.length === 1
+            ? selectedGroupFilters[0]
+            : undefined,
+      })
+      setGroups((current) => [...current, group])
+      setGroupName("")
+      setGroupDialogOpen(false)
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Could not create group"))
+    } finally {
+      setCreatingGroup(false)
+    }
+  }
+
+  const pathLabelById = useMemo(() => buildPathLabelMap(groups), [groups])
+  const descendantIdsByGroup = useMemo(
+    () => buildDescendantIdMap(groups),
+    [groups]
+  )
+  const allTags = useMemo(
+    () =>
+      [
+        ...new Set([...tagSuggestions, ...notes.flatMap((note) => note.tags)]),
+      ].sort((left, right) => left.localeCompare(right)),
+    [notes, tagSuggestions]
+  )
+
+  const selectedGroupScope = useMemo(() => {
+    const next = new Set<string>()
+    for (const groupId of selectedGroupFilters) {
+      for (const scopedId of descendantIdsByGroup.get(groupId) ?? [groupId]) {
+        next.add(scopedId)
+      }
+    }
+    return next
+  }, [descendantIdsByGroup, selectedGroupFilters])
+
+  const filteredNotes = useMemo(() => {
     return notes.filter((note) => {
-      if (status !== "all" && note.status !== status) return false
-      if (folder === "ungrouped" && note.groupIds.length > 0) return false
-      if (scope && !note.groupIds.some((groupId) => scope.has(groupId))) {
+      const groupSearchLabels = note.groupIds
+        .map((groupId) => pathLabelById.get(groupId))
+        .filter((label): label is string => Boolean(label))
+      if (!matchesQuery(note, query, groupSearchLabels)) return false
+      if (statusFilter !== "all" && note.status !== statusFilter) return false
+      if (hasUrlFilter === "with-url" && !note.url) return false
+      if (hasUrlFilter === "without-url" && note.url) return false
+      if (
+        selectedGroupScope.size > 0 &&
+        !note.groupIds.some((groupId) => selectedGroupScope.has(groupId))
+      ) {
         return false
       }
-      if (!normalizedQuery) return true
-      const groupNames = note.groupIds
-        .map((groupId) => groupById.get(groupId)?.name)
-        .filter((value): value is string => Boolean(value))
-      const haystack = [
-        note.title,
-        note.contentPlainText,
-        note.url,
-        note.description,
-        note.siteName,
-        note.class,
-        ...note.tags,
-        ...groupNames,
-      ]
-        .filter((value): value is string => Boolean(value))
-        .join(" ")
-        .toLowerCase()
-      return haystack.includes(normalizedQuery)
+      if (
+        selectedTagFilters.length > 0 &&
+        !selectedTagFilters.every((tag) => note.tags.includes(tag))
+      ) {
+        return false
+      }
+      return true
     })
-  }, [folder, groupById, groups, notes, query, status])
+  }, [
+    hasUrlFilter,
+    notes,
+    pathLabelById,
+    query,
+    selectedGroupScope,
+    selectedTagFilters,
+    statusFilter,
+  ])
+
+  const sortedNotes = useMemo(
+    () => sortNotes(filteredNotes, sort),
+    [filteredNotes, sort]
+  )
+
+  const graphGroups = useMemo(
+    () => collectVisibleGroups(sortedNotes, groups),
+    [groups, sortedNotes]
+  )
+
+  const graphEdges = useMemo(() => {
+    const visibleIds = new Set(sortedNotes.map((note) => note.id))
+    return edges.filter(
+      (edge) => visibleIds.has(edge.fromNoteId) && visibleIds.has(edge.toNoteId)
+    )
+  }, [edges, sortedNotes])
 
   const selectedNote = useMemo(
     () => notes.find((note) => note.id === selectedId) ?? null,
     [notes, selectedId]
   )
+  const selectedGroup = useMemo(
+    () => groups.find((group) => group.id === selectedGroupId) ?? null,
+    [groups, selectedGroupId]
+  )
 
-  const createNote = async () => {
-    try {
-      const response = await client.notes.create({
-        title: "Untitled note",
-        content: "",
-        groupIds:
-          folder !== "all" && folder !== "ungrouped" ? [folder] : undefined,
-      })
-      setSelectedId(response.note.id)
-      await load(true)
-    } catch (error) {
-      toast.error(getErrorMessage(error, "Could not create note"))
+  useEffect(() => {
+    const handlePaste = (event: ClipboardEvent) => {
+      if (
+        importingLink ||
+        selectedId ||
+        selectedGroupId ||
+        isEditablePasteTarget(event.target)
+      ) {
+        return
+      }
+      const text = event.clipboardData?.getData("text") ?? ""
+      const url = parseHttpUrl(text)
+      if (!url) return
+      event.preventDefault()
+      void handlePasteImport(url)
     }
-  }
+    window.addEventListener("paste", handlePaste)
+    return () => window.removeEventListener("paste", handlePaste)
+  }, [handlePasteImport, importingLink, selectedGroupId, selectedId])
 
-  const createFolder = async () => {
-    const name = window.prompt("Folder name")
-    if (!name?.trim()) return
-    try {
-      await client.notes.groups.create({
-        name: name.trim(),
-        parentId:
-          folder !== "all" && folder !== "ungrouped" ? folder : undefined,
-      })
-      await load(true)
-    } catch (error) {
-      toast.error(getErrorMessage(error, "Could not create folder"))
-    }
-  }
+  const hasActiveFilters =
+    query.trim().length > 0 ||
+    selectedGroupFilters.length > 0 ||
+    selectedTagFilters.length > 0 ||
+    hasUrlFilter !== "all" ||
+    statusFilter !== "all" ||
+    sort !== "updated-desc"
 
-  const updateNote = async (id: string, input: UpdateNoteInput) => {
-    const response = await client.notes.update(id, input)
-    setNotes((current) =>
-      current.map((note) => (note.id === id ? response.note : note))
-    )
-    return response.note
-  }
-
-  const deleteNote = async (id: string) => {
-    if (!window.confirm("Delete this note?")) return
-    try {
-      await client.notes.delete(id)
-      setSelectedId(null)
-      await load(true)
-      toast.success("Note deleted")
-    } catch (error) {
-      toast.error(getErrorMessage(error, "Could not delete note"))
-    }
-  }
+  const header = (
+    <AppHeader
+      title={headerTitle}
+      className={headerClassName}
+      dragRegion={headerDragRegion}
+      sidebarOpen={false}
+      user={user}
+      onLogout={() => void onSignOut()}
+      backgroundItems={[]}
+      notifications={[]}
+      endSlot={headerEndSlot}
+    />
+  )
 
   if (!ready || loading) {
     return (
-      <div className="flex h-svh items-center justify-center">
-        <Spinner className="size-5 text-muted-foreground" />
+      <div className="flex h-svh w-full flex-col overflow-hidden bg-background">
+        {header}
+        <div className="flex flex-1 items-center justify-center">
+          <Spinner className="size-5 text-muted-foreground" />
+        </div>
       </div>
     )
   }
 
-  return (
-    <div className="flex h-svh w-full overflow-hidden bg-background">
-      <div className="flex min-w-0 flex-1 flex-col">
-        <AppHeader
-          title={headerTitle}
-          className={headerClassName}
-          dragRegion={headerDragRegion}
-          sidebarOpen={false}
-          onToggleSidebar={() => undefined}
-          user={user}
-          onLogout={() => void onSignOut()}
-          backgroundItems={[]}
-          notifications={[]}
-          endSlot={headerEndSlot}
-        />
+  let body: ReactNode
+  if (selectedNote) {
+    body = (
+      <NoteDetail
+        note={selectedNote}
+        allNotes={notes}
+        groups={groups}
+        edges={edges}
+        suggestions={allTags}
+        onPatch={(input) => handlePatchNote(selectedNote.id, input)}
+        onDelete={() => handleDeleteNote(selectedNote.id)}
+        onBack={() => setSelectedId(null)}
+        onSelectNote={(note) => {
+          setSelectedGroupId(null)
+          setSelectedId(note.id)
+        }}
+        onSuggestionsChange={setTagSuggestions}
+      />
+    )
+  } else if (selectedGroup) {
+    body = (
+      <GroupDetail
+        group={selectedGroup}
+        groups={groups}
+        notes={notes}
+        onBack={() => setSelectedGroupId(null)}
+        onUpdate={handleUpdateGroup}
+        onDelete={handleDeleteGroup}
+        onSelectNote={(note) => {
+          setSelectedGroupId(null)
+          setSelectedId(note.id)
+        }}
+        onSelectGroup={(group) => setSelectedGroupId(group.id)}
+      />
+    )
+  } else {
+    body = (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
+          <div className="flex shrink-0 items-center gap-2">
+            <FileText className="size-4" />
+            <span className="font-medium text-sm">Notes</span>
+            <span className="shrink-0 text-muted-foreground text-xs tabular-nums">
+              {sortedNotes.length} / {notes.length} · {groups.length} groups
+            </span>
+          </div>
 
-        <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
-          <div className="relative min-w-48 flex-1">
-            <Search className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 size-3.5 text-muted-foreground" />
+          <div className="sm:ml-2 flex grow items-center gap-2">
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search notes, folders, tags..."
-              className="h-8 pl-8 text-sm"
+              placeholder="Search title, content, url, tags…"
+              className="h-7 w-full! max-w-full! text-xs"
             />
-          </div>
-          <Tabs
-            value={view}
-            onValueChange={(value) => setView(value as ViewMode)}
-          >
-            <TabsList className="h-8">
-              <TabsTrigger value="folders" className="h-6 px-2">
-                <ListTree className="size-3.5" />
-              </TabsTrigger>
-              <TabsTrigger value="graph" className="h-6 px-2">
-                <LayoutGrid className="size-3.5" />
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void load(true)}
-            disabled={refreshing}
-          >
-            {refreshing ? (
-              <Spinner className="size-3.5" />
-            ) : (
-              <RefreshCcw className="size-3.5" />
-            )}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void createFolder()}
-          >
-            <FolderPlus className="size-3.5" />
-            Folder
-          </Button>
-          <Button size="sm" onClick={() => void createNote()}>
-            <FilePlus2 className="size-3.5" />
-            Note
-          </Button>
-        </div>
 
-        <main className="grid min-h-0 flex-1 grid-cols-[18rem_minmax(0,1fr)]">
-          <aside className="min-h-0 border-r">
-            <FolderSidebar
-              groups={groupTree}
-              notes={notes}
-              selected={folder}
-              onSelect={(next) => {
-                setFolder(next)
-                setSelectedId(null)
-              }}
-              status={status}
-              onStatusChange={setStatus}
-            />
-          </aside>
-
-          <section className="min-h-0 overflow-hidden">
-            {selectedNote ? (
-              <NoteDetail
-                note={selectedNote}
-                groups={groups}
-                relatedNotes={relatedNotes(selectedNote, notes, edges)}
-                onBack={() => setSelectedId(null)}
-                onSelectNote={(note) => setSelectedId(note.id)}
-                onSave={(input) => updateNote(selectedNote.id, input)}
-                onDelete={() => deleteNote(selectedNote.id)}
-              />
-            ) : view === "graph" ? (
-              <NotesGraph
-                notes={visibleNotes}
-                groups={groups}
-                edges={edges}
-                onSelectNote={(note) => setSelectedId(note.id)}
-                onSelectGroup={(group) => setFolder(group.id)}
-              />
-            ) : (
-              <FolderContents
-                notes={visibleNotes}
-                groups={groups}
-                folder={folder}
-                onSelectNote={(note) => setSelectedId(note.id)}
-                onSelectGroup={(group) => setFolder(group.id)}
-              />
-            )}
-          </section>
-        </main>
-      </div>
-    </div>
-  )
-}
-
-function relatedNotes(note: Note, notes: Note[], edges: NoteEdge[]) {
-  const ids = new Set<string>()
-  for (const edge of edges) {
-    if (edge.fromNoteId === note.id) ids.add(edge.toNoteId)
-    if (edge.toNoteId === note.id) ids.add(edge.fromNoteId)
-  }
-  return notes.filter((candidate) => ids.has(candidate.id))
-}
-
-function FolderSidebar({
-  groups,
-  notes,
-  selected,
-  onSelect,
-  status,
-  onStatusChange,
-}: {
-  groups: GroupNode[]
-  notes: Note[]
-  selected: FolderSelection
-  onSelect: (folder: FolderSelection) => void
-  status: NotesQuery["status"]
-  onStatusChange: (status: StatusFilter) => void
-}) {
-  const ungroupedCount = notes.filter(
-    (note) => note.status !== "deleted" && note.groupIds.length === 0
-  ).length
-  return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center justify-between border-b px-3 py-2">
-        <span className="text-xs font-medium text-muted-foreground">
-          Folders
-        </span>
-        <select
-          value={status}
-          onChange={(event) =>
-            onStatusChange(event.target.value as StatusFilter)
-          }
-          className="h-7 rounded-md border bg-background px-2 text-xs outline-none"
-        >
-          <option value="open">Open</option>
-          <option value="archived">Archived</option>
-          <option value="all">All</option>
-        </select>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
-        <FolderButton
-          label="All notes"
-          count={notes.filter((note) => note.status !== "deleted").length}
-          selected={selected === "all"}
-          onClick={() => onSelect("all")}
-        />
-        <FolderButton
-          label="Ungrouped"
-          count={ungroupedCount}
-          selected={selected === "ungrouped"}
-          onClick={() => onSelect("ungrouped")}
-        />
-        <div className="mt-2 space-y-0.5">
-          {groups.map((group) => (
-            <FolderTreeNode
-              key={group.id}
-              group={group}
-              notes={notes}
-              selected={selected}
-              onSelect={onSelect}
-              depth={0}
-            />
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function FolderButton({
-  label,
-  count,
-  selected,
-  onClick,
-  depth = 0,
-}: {
-  label: string
-  count: number
-  selected: boolean
-  onClick: () => void
-  depth?: number
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-muted",
-        selected && "bg-muted text-foreground"
-      )}
-      style={{ paddingLeft: `${8 + depth * 14}px` }}
-    >
-      <Folder className="size-3.5 text-muted-foreground" />
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      <span className="text-[11px] tabular-nums text-muted-foreground">
-        {count}
-      </span>
-    </button>
-  )
-}
-
-function FolderTreeNode({
-  group,
-  notes,
-  selected,
-  onSelect,
-  depth,
-}: {
-  group: GroupNode
-  notes: Note[]
-  selected: FolderSelection
-  onSelect: (folder: FolderSelection) => void
-  depth: number
-}) {
-  const scope = useMemo(() => collectGroupIds(group), [group])
-  const count = notes.filter((note) =>
-    note.groupIds.some((groupId) => scope.has(groupId))
-  ).length
-  return (
-    <div>
-      <FolderButton
-        label={group.name}
-        count={count}
-        selected={selected === group.id}
-        onClick={() => onSelect(group.id)}
-        depth={depth}
-      />
-      {group.children.length > 0 ? (
-        <div>
-          {group.children.map((child) => (
-            <FolderTreeNode
-              key={child.id}
-              group={child}
-              notes={notes}
-              selected={selected}
-              onSelect={onSelect}
-              depth={depth + 1}
-            />
-          ))}
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
-function collectGroupIds(group: GroupNode) {
-  const result = new Set<string>([group.id])
-  const stack = [...group.children]
-  while (stack.length > 0) {
-    const child = stack.pop()
-    if (!child) continue
-    result.add(child.id)
-    stack.push(...child.children)
-  }
-  return result
-}
-
-function FolderContents({
-  notes,
-  groups,
-  folder,
-  onSelectNote,
-  onSelectGroup,
-}: {
-  notes: Note[]
-  groups: NoteGroup[]
-  folder: FolderSelection
-  onSelectNote: (note: Note) => void
-  onSelectGroup: (group: NoteGroup) => void
-}) {
-  const childGroups = groups.filter((group) =>
-    folder === "all" || folder === "ungrouped"
-      ? group.parentId === null
-      : group.parentId === folder
-  )
-  const groupById = new Map(groups.map((group) => [group.id, group]))
-
-  if (notes.length === 0 && childGroups.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        No notes here yet.
-      </div>
-    )
-  }
-
-  return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto w-full max-w-5xl p-4">
-        {childGroups.length > 0 ? (
-          <div className="mb-5 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            {childGroups.map((group) => (
-              <button
-                key={group.id}
-                type="button"
-                onClick={() => onSelectGroup(group)}
-                className="flex h-12 items-center gap-2 rounded-md border px-3 text-left hover:bg-muted"
-              >
-                <Folder className="size-4 text-muted-foreground" />
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                  {group.name}
-                </span>
-              </button>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="divide-y border-y">
-          {notes.map((note) => (
-            <button
-              type="button"
-              key={note.id}
-              onClick={() => onSelectNote(note)}
-              className="grid w-full grid-cols-[1.5rem_minmax(0,1.3fr)_minmax(0,1fr)_7rem] gap-3 px-2 py-3 text-left hover:bg-muted/50"
+            <Tabs
+              value={view}
+              onValueChange={(value) => setView(value as View)}
             >
-              <NoteIcon note={note} />
-              <div className="min-w-0">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="truncate text-sm font-medium">
-                    {note.title}
-                  </span>
-                  {note.url ? (
-                    <ExternalLink className="size-3 text-muted-foreground" />
-                  ) : null}
-                </div>
-                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                  {excerptFromNote(note)}
-                </p>
-              </div>
-              <div className="flex min-w-0 flex-wrap content-start gap-1">
-                {note.groupIds.slice(0, 3).map((groupId) => {
-                  const group = groupById.get(groupId)
-                  if (!group) return null
-                  return (
-                    <Badge key={group.id} variant="secondary" className="h-5">
-                      {group.name}
-                    </Badge>
-                  )
-                })}
-              </div>
-              <div className="text-right text-xs text-muted-foreground">
-                {formatDate(note.updatedAt)}
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
+              <TabsList className="h-7!">
+                <TabsTrigger value="graph" className="h-5.5 px-2 text-xs">
+                  <LayoutGrid className="size-3.5" />
+                </TabsTrigger>
+                <TabsTrigger value="folders" className="h-5.5 px-2 text-xs">
+                  <FolderTree className="size-3.5" />
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
 
-function NoteIcon({ note }: { note: Note }) {
-  if (note.favicon) {
-    return (
-      <img src={note.favicon} alt="" className="mt-0.5 size-4 rounded-sm" />
-    )
-  }
-  return note.url ? (
-    <Globe className="mt-0.5 size-4 text-muted-foreground" />
-  ) : (
-    <FileText className="mt-0.5 size-4 text-muted-foreground" />
-  )
-}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7"
+              onClick={() => void load(true)}
+              title="Refresh"
+            >
+              {refreshing ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <RefreshCcw className="size-3.5" />
+              )}
+            </Button>
 
-function NoteDetail({
-  note,
-  groups,
-  relatedNotes,
-  onBack,
-  onSelectNote,
-  onSave,
-  onDelete,
-}: {
-  note: Note
-  groups: NoteGroup[]
-  relatedNotes: Note[]
-  onBack: () => void
-  onSelectNote: (note: Note) => void
-  onSave: (input: UpdateNoteInput) => Promise<Note>
-  onDelete: () => void
-}) {
-  const [title, setTitle] = useState(note.title)
-  const [content, setContent] = useState(note.content)
-  const [mode, setMode] = useState<EditorMode>("preview")
-  const [saving, setSaving] = useState(false)
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7"
+              onClick={() => setGroupDialogOpen(true)}
+            >
+              <FolderPlus className="size-3.5" />
+              <span className="hidden sm:inline">Group</span>
+            </Button>
 
-  useEffect(() => {
-    setTitle(note.title)
-    setContent(note.content)
-    setMode(note.content.trim() ? "preview" : "write")
-  }, [note.id, note.title, note.content])
-
-  const saveTitle = useCallback(
-    async (nextTitle: string) => {
-      const trimmed = nextTitle.trim()
-      if (!trimmed || trimmed === note.title) return
-      try {
-        await onSave({ title: trimmed })
-      } catch (error) {
-        toast.error(getErrorMessage(error, "Could not save title"))
-      }
-    },
-    [note.title, onSave]
-  )
-
-  const scheduleTitleSave = (nextTitle: string) => {
-    setTitle(nextTitle)
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => {
-      void saveTitle(nextTitle)
-    }, 700)
-  }
-
-  const saveContent = async () => {
-    try {
-      setSaving(true)
-      await onSave({ content })
-      setMode("preview")
-      toast.success("Note saved")
-    } catch (error) {
-      toast.error(getErrorMessage(error, "Could not save note"))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const exportMarkdown = () => {
-    const blob = new Blob([content], { type: "text/markdown;charset=utf-8" })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.href = url
-    link.download = `${title.trim() || "note"}.md`
-    link.click()
-    URL.revokeObjectURL(url)
-  }
-
-  const noteGroups = note.groupIds
-    .map((groupId) => groups.find((group) => group.id === groupId))
-    .filter((group): group is NoteGroup => Boolean(group))
-
-  return (
-    <div className="flex h-full flex-col">
-      <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
-        <div className="flex min-w-0 items-center gap-2">
-          <Button variant="ghost" size="icon-sm" onClick={onBack}>
-            <ArrowLeft className="size-4" />
-          </Button>
-          <NoteIcon note={note} />
-          <span className="truncate text-xs text-muted-foreground">
-            {note.url ? safeHostname(note.url) : "Markdown note"}
-          </span>
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-destructive hover:text-destructive"
-          onClick={onDelete}
-        >
-          <Trash2 className="size-3.5" />
-          Delete
-        </Button>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-4xl px-6 py-6">
-          <Input
-            value={title}
-            onChange={(event) => scheduleTitleSave(event.target.value)}
-            onBlur={() => void saveTitle(title)}
-            placeholder="Untitled note"
-            className="h-auto border-none bg-transparent px-0 py-1 text-2xl font-semibold shadow-none focus-visible:ring-0"
-          />
-
-          <div className="mt-5 divide-y border-y text-xs">
-            <PropertyRow label="created">
-              {formatDate(note.createdAt)}
-            </PropertyRow>
-            {note.url ? (
-              <PropertyRow label="source">
-                <a
-                  href={note.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex min-w-0 items-center gap-1 text-primary hover:underline"
-                >
-                  <span className="truncate">{note.url}</span>
-                  <ExternalLink className="size-3" />
-                </a>
-              </PropertyRow>
-            ) : null}
-            <PropertyRow label="folders">
-              <div className="flex flex-wrap gap-1">
-                {noteGroups.length === 0 ? (
-                  <span className="text-muted-foreground">None</span>
-                ) : (
-                  noteGroups.map((group) => (
-                    <Badge key={group.id} variant="secondary">
-                      {group.name}
-                    </Badge>
-                  ))
-                )}
-              </div>
-            </PropertyRow>
-            <PropertyRow label="tags">
-              <div className="flex flex-wrap gap-1">
-                {note.tags.length === 0 ? (
-                  <span className="text-muted-foreground">None</span>
-                ) : (
-                  note.tags.map((tag) => (
-                    <Badge key={tag} variant="outline">
-                      {tag}
-                    </Badge>
-                  ))
-                )}
-              </div>
-            </PropertyRow>
-            {relatedNotes.length > 0 ? (
-              <PropertyRow label="related">
-                <div className="flex flex-wrap gap-1">
-                  {relatedNotes.map((related) => (
-                    <button
-                      type="button"
-                      key={related.id}
-                      onClick={() => onSelectNote(related)}
-                      className="rounded-md border px-1.5 py-0.5 text-[11px] hover:bg-muted"
-                    >
-                      {related.title}
-                    </button>
-                  ))}
-                </div>
-              </PropertyRow>
-            ) : null}
-          </div>
-
-          <div className="mt-7 flex min-h-[55vh] flex-col border">
-            <div className="flex h-10 shrink-0 items-center justify-between border-b px-2">
-              <Tabs
-                value={mode}
-                onValueChange={(value) => setMode(value as EditorMode)}
-              >
-                <TabsList className="h-8">
-                  <TabsTrigger value="write" className="h-6 px-2 text-xs">
-                    Write
-                  </TabsTrigger>
-                  <TabsTrigger value="preview" className="h-6 px-2 text-xs">
-                    Preview
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-              <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon-sm" onClick={exportMarkdown}>
-                  <Download className="size-3.5" />
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={content === note.content || saving}
-                  onClick={() => void saveContent()}
-                >
-                  {saving ? (
-                    <Spinner className="size-3.5" />
-                  ) : (
-                    <Save className="size-3.5" />
-                  )}
-                  Save
-                </Button>
-              </div>
-            </div>
-            {mode === "write" ? (
-              <Textarea
-                value={content}
-                onChange={(event) => setContent(event.target.value)}
-                className="min-h-[55vh] flex-1 resize-none rounded-none border-0 p-4 font-mono text-sm shadow-none focus-visible:ring-0"
-                placeholder="Write in markdown..."
-              />
-            ) : (
-              <div className="min-h-[55vh] flex-1 overflow-y-auto p-4">
-                {content.trim() ? (
-                  <MarkdownRenderer content={content} />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                    Empty note
-                  </div>
-                )}
-              </div>
-            )}
+            <Button
+              size="sm"
+              className="h-7"
+              onClick={() => void createNote()}
+              disabled={creatingNote}
+            >
+              {creatingNote ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <FilePlus2 className="size-3.5" />
+              )}
+              <span className="hidden sm:inline">Note</span>
+            </Button>
           </div>
         </div>
-      </div>
-    </div>
-  )
-}
 
-function PropertyRow({
-  label,
-  children,
-}: {
-  label: string
-  children: ReactNode
-}) {
-  return (
-    <div className="grid grid-cols-[8rem_minmax(0,1fr)] items-center gap-3 px-2 py-1.5">
-      <span className="font-mono text-[11px] text-muted-foreground">
-        {label}
-      </span>
-      <div className="min-w-0">{children}</div>
-    </div>
-  )
-}
-
-function NotesGraph({
-  notes,
-  groups,
-  edges,
-  onSelectNote,
-  onSelectGroup,
-}: {
-  notes: Note[]
-  groups: NoteGroup[]
-  edges: NoteEdge[]
-  onSelectNote: (note: Note) => void
-  onSelectGroup: (group: NoteGroup) => void
-}) {
-  const visibleIds = new Set(notes.map((note) => note.id))
-  const visibleEdges = edges.filter(
-    (edge) => visibleIds.has(edge.fromNoteId) && visibleIds.has(edge.toNoteId)
-  )
-  const positions = new Map<string, { x: number; y: number }>()
-  const centerX = 50
-  const centerY = 48
-  const radius = 32
-  notes.forEach((note, index) => {
-    const angle = (index / Math.max(notes.length, 1)) * Math.PI * 2
-    positions.set(note.id, {
-      x: centerX + Math.cos(angle) * radius,
-      y: centerY + Math.sin(angle) * radius,
-    })
-  })
-
-  if (notes.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        No notes match the current filters.
-      </div>
-    )
-  }
-
-  return (
-    <div className="relative h-full overflow-hidden bg-muted/10">
-      <svg className="absolute inset-0 h-full w-full" aria-hidden="true">
-        {visibleEdges.map((edge) => {
-          const from = positions.get(edge.fromNoteId)
-          const to = positions.get(edge.toNoteId)
-          if (!from || !to) return null
-          return (
-            <line
-              key={edge.id}
-              x1={`${from.x}%`}
-              y1={`${from.y}%`}
-              x2={`${to.x}%`}
-              y2={`${to.y}%`}
-              stroke="hsl(var(--border))"
-              strokeWidth={1 + edge.strength}
+        <div className="flex w-full flex-wrap items-center gap-2 border-b px-4 py-2">
+          <div className="flex min-w-0 max-w-full items-center gap-2">
+            <span className="flex shrink-0 items-center gap-1.5 text-[10px] text-muted-foreground uppercase tracking-wide">
+              <FolderTree className="size-3.5" />
+            </span>
+            <GroupTreeCombobox
+              groups={groups}
+              value={selectedGroupFilters}
+              onChange={setSelectedGroupFilters}
+              placeholder="Filter groups…"
+              searchPlaceholder="Search group hierarchy…"
+              emptyMessage="No groups yet"
             />
-          )
-        })}
-      </svg>
-      <div className="absolute top-3 left-3 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-1">
-        {groups.slice(0, 12).map((group) => (
-          <button
-            type="button"
-            key={group.id}
-            onClick={() => onSelectGroup(group)}
-            className="inline-flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-xs hover:bg-muted"
+          </div>
+
+          <div className="flex min-w-0 max-w-full items-center gap-2">
+            <span className="flex shrink-0 items-center gap-1.5 text-[10px] text-muted-foreground uppercase tracking-wide">
+              <Tags className="size-3.5" />
+            </span>
+            <TagAutocomplete
+              value={selectedTagFilters}
+              onChange={setSelectedTagFilters}
+              suggestions={allTags}
+              placeholder="Filter tags…"
+              allowCreate={false}
+              searchPlaceholder="Search tags…"
+              emptyMessage="No tags found"
+            />
+          </div>
+
+          <Select
+            value={hasUrlFilter}
+            onValueChange={(value) => setHasUrlFilter(value as HasUrlFilter)}
           >
-            <Folder className="size-3" />
-            {group.name}
-          </button>
-        ))}
+            <SelectTrigger size="sm" className="sm:ml-auto w-32 text-xs">
+              <div className="flex h-4! items-center gap-1.5">
+                <Link2 className="size-3.5" />
+                <SelectValue />
+              </div>
+            </SelectTrigger>
+            <SelectContent position="popper">
+              <SelectItem value="all" className="text-xs">
+                All links
+              </SelectItem>
+              <SelectItem value="with-url" className="text-xs">
+                With URL
+              </SelectItem>
+              <SelectItem value="without-url" className="text-xs">
+                Without URL
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={statusFilter}
+            onValueChange={(value) => setStatusFilter(value as StatusFilter)}
+          >
+            <SelectTrigger size="sm" className="h-7 w-32 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent position="popper">
+              <SelectItem value="all" className="text-xs">
+                All status
+              </SelectItem>
+              <SelectItem value="open" className="text-xs">
+                Open
+              </SelectItem>
+              <SelectItem value="archived" className="text-xs">
+                Archived
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={sort}
+            onValueChange={(value) => setSort(value as Sort)}
+          >
+            <SelectTrigger size="sm" className="h-7 w-40 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent position="popper">
+              <SelectItem value="updated-desc" className="text-xs">
+                Updated newest
+              </SelectItem>
+              <SelectItem value="updated-asc" className="text-xs">
+                Updated oldest
+              </SelectItem>
+              <SelectItem value="created-desc" className="text-xs">
+                Created newest
+              </SelectItem>
+              <SelectItem value="created-asc" className="text-xs">
+                Created oldest
+              </SelectItem>
+              <SelectItem value="title-asc" className="text-xs">
+                Title A-Z
+              </SelectItem>
+              <SelectItem value="title-desc" className="text-xs">
+                Title Z-A
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => {
+                setQuery("")
+                setSelectedGroupFilters([])
+                setSelectedTagFilters([])
+                setHasUrlFilter("all")
+                setStatusFilter("all")
+                setSort("updated-desc")
+              }}
+            >
+              <X className="size-3.5" />
+              Clear
+            </Button>
+          )}
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-hidden">
+          {view === "graph" ? (
+            <NoteGraph
+              notes={sortedNotes}
+              groups={graphGroups}
+              edges={graphEdges}
+              onSelectNote={(note) => {
+                setSelectedGroupId(null)
+                setSelectedId(note.id)
+              }}
+              onSelectGroup={(group) => {
+                setSelectedId(null)
+                setSelectedGroupId(group.id)
+              }}
+            />
+          ) : (
+            <FolderExplorer
+              notes={sortedNotes}
+              groups={groups}
+              currentId={folderId}
+              onNavigate={setFolderId}
+              onSelectNote={(note) => {
+                setSelectedGroupId(null)
+                setSelectedId(note.id)
+              }}
+              onOpenGroup={(group) => {
+                setSelectedId(null)
+                setSelectedGroupId(group.id)
+              }}
+            />
+          )}
+        </div>
       </div>
-      {notes.map((note) => {
-        const point = positions.get(note.id)
-        if (!point) return null
-        return (
-          <button
-            type="button"
-            key={note.id}
-            onClick={() => onSelectNote(note)}
-            className="-translate-x-1/2 -translate-y-1/2 absolute max-w-44 rounded-md border bg-background px-3 py-2 text-left shadow-sm hover:bg-muted"
-            style={{ left: `${point.x}%`, top: `${point.y}%` }}
+    )
+  }
+
+  return (
+    <div className="flex h-svh w-full flex-col overflow-hidden bg-background">
+      {header}
+      {body}
+
+      <Dialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault()
+              void createGroup()
+            }}
           >
-            <div className="flex min-w-0 items-center gap-2">
-              <GitBranch className="size-3.5 text-muted-foreground" />
-              <span className="truncate text-xs font-medium">{note.title}</span>
+            <DialogHeader>
+              <DialogTitle>New group</DialogTitle>
+              <DialogDescription>
+                {selectedGroupFilters.length === 1
+                  ? "Create a group inside the filtered group."
+                  : "Create a top-level group."}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <Input
+                autoFocus
+                value={groupName}
+                onChange={(event) => setGroupName(event.target.value)}
+                placeholder="Group name"
+              />
             </div>
-            <div className="mt-1 truncate text-[11px] text-muted-foreground">
-              {safeHostname(note.url) ??
-                note.tags.slice(0, 2).join(", ") ??
-                "note"}
-            </div>
-          </button>
-        )
-      })}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setGroupDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={!groupName.trim() || creatingGroup}
+              >
+                {creatingGroup ? <Spinner className="size-3.5" /> : null}
+                Create
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

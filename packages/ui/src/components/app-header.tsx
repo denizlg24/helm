@@ -109,7 +109,7 @@ export function AppHeader({
       ) : null}
 
       <div className="min-w-0">
-        <p className="truncate text-[0.95rem] text-foreground tracking-normal">
+        <p className="truncate text-sm text-foreground font-medium lowercase">
           {title}
         </p>
       </div>

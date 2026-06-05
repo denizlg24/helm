@@ -125,8 +125,8 @@ const noteSchema = new Schema<NoteDocument>(
   {
     ...baseFields,
     title: { type: String, required: true },
-    content: { type: String, required: true, default: "" },
-    contentPlainText: { type: String, required: true, default: "" },
+    content: { type: String, default: "" },
+    contentPlainText: { type: String, default: "" },
     contentHash: { type: String, required: true },
     sourceType: {
       type: String,
@@ -265,7 +265,7 @@ const noteOrganizerRunSchema = new Schema<NoteOrganizerRunDocument>(
     completedAt: { type: Date, default: null },
     error: { type: String, default: null },
   },
-  { versionKey: false }
+  { timestamps: true, versionKey: false }
 )
 
 noteSchema.index({ tenantId: 1, workspaceId: 1, updatedAt: -1 })
@@ -278,27 +278,51 @@ noteEdgeSchema.index(
 
 @Injectable()
 export class NotesRepository {
-  readonly notes: Model<NoteDocument>
-  readonly groups: Model<NoteGroupDocument>
-  readonly edges: Model<NoteEdgeDocument>
-  readonly suggestions: Model<NoteSuggestionDocument>
-  readonly organizerRuns: Model<NoteOrganizerRunDocument>
+  constructor(private readonly mongo: MongoService) {}
 
-  constructor(mongo: MongoService) {
-    const connection = mongo.getConnection()
-    this.notes = connection.model<NoteDocument>("Note", noteSchema)
-    this.groups = connection.model<NoteGroupDocument>(
-      "NoteGroup",
-      noteGroupSchema
+  get notes(): Model<NoteDocument> {
+    const connection = this.mongo.getConnection()
+    return (
+      connection.models.Note ??
+      connection.model<NoteDocument>("Note", noteSchema)
     )
-    this.edges = connection.model<NoteEdgeDocument>("NoteEdge", noteEdgeSchema)
-    this.suggestions = connection.model<NoteSuggestionDocument>(
-      "NoteSuggestion",
-      noteSuggestionSchema
+  }
+
+  get groups(): Model<NoteGroupDocument> {
+    const connection = this.mongo.getConnection()
+    return (
+      connection.models.NoteGroup ??
+      connection.model<NoteGroupDocument>("NoteGroup", noteGroupSchema)
     )
-    this.organizerRuns = connection.model<NoteOrganizerRunDocument>(
-      "NoteOrganizerRun",
-      noteOrganizerRunSchema
+  }
+
+  get edges(): Model<NoteEdgeDocument> {
+    const connection = this.mongo.getConnection()
+    return (
+      connection.models.NoteEdge ??
+      connection.model<NoteEdgeDocument>("NoteEdge", noteEdgeSchema)
+    )
+  }
+
+  get suggestions(): Model<NoteSuggestionDocument> {
+    const connection = this.mongo.getConnection()
+    return (
+      connection.models.NoteSuggestion ??
+      connection.model<NoteSuggestionDocument>(
+        "NoteSuggestion",
+        noteSuggestionSchema
+      )
+    )
+  }
+
+  get organizerRuns(): Model<NoteOrganizerRunDocument> {
+    const connection = this.mongo.getConnection()
+    return (
+      connection.models.NoteOrganizerRun ??
+      connection.model<NoteOrganizerRunDocument>(
+        "NoteOrganizerRun",
+        noteOrganizerRunSchema
+      )
     )
   }
 

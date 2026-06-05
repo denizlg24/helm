@@ -5,18 +5,52 @@ import {
   ConversationSidebar,
   useAssistantChat,
 } from "@workspace/assistant"
+import { moduleDefinitions } from "@workspace/module-registry"
 import type { AssistantConversationSummary } from "@workspace/types"
 import {
   AppHeader,
   type AppHeaderUser,
 } from "@workspace/ui/components/app-header"
 import { Button } from "@workspace/ui/components/button"
+import {
+  type CommandPaletteEntry,
+  CommandPaletteOverlay,
+} from "@workspace/ui/components/command-palette-overlay"
 import { Spinner } from "@workspace/ui/components/spinner"
 import { cn } from "@workspace/ui/lib/utils"
-import { NotesDashboard } from "@workspace/ui/notes/notes-dashboard"
-import { FileText, MessageSquare } from "lucide-react"
-import { useCallback, useEffect, useState } from "react"
+import type { LucideIcon } from "lucide-react"
+import {
+  AlarmClock,
+  Bot,
+  Brain,
+  Calendar,
+  Download,
+  FileText,
+  FolderGit2,
+  HomeIcon,
+  Inbox,
+  Kanban,
+  KeyRound,
+  MessageCircle,
+  NotebookPen,
+  PenTool,
+  Radio,
+  Settings,
+  Table,
+  UserSquare,
+  UsersRound,
+} from "lucide-react"
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react"
 import { apiClient, setApiToken, setApiWorkspaceId } from "../lib/api"
+import { featureGatedImport } from "../lib/feature-gated-import"
+import { isFeatureEnabled } from "../lib/features"
 import { WindowControls } from "./window-controls"
 
 interface NativeSelectedFile {
@@ -59,6 +93,82 @@ const selectNativeFiles = async (): Promise<File[]> => {
   }
 }
 
+const NotesDashboard = lazy(async () => {
+  const module = await featureGatedImport(
+    "notes",
+    () => import("@workspace/ui/notes/notes-dashboard")
+  )
+
+  if (!module) {
+    return {
+      default: () => (
+        <div className="flex h-svh items-center justify-center bg-background px-6 text-center">
+          <div className="max-w-sm">
+            <p className="font-medium text-foreground">Notes is not bundled</p>
+            <p className="mt-2 text-muted-foreground text-sm">
+              This desktop build does not include the Notes module.
+            </p>
+          </div>
+        </div>
+      ),
+    }
+  }
+
+  return { default: module.NotesDashboard }
+})
+
+const GROUP_LABELS: Record<string, string> = {
+  communications: "Communications",
+  core: "Core",
+  infrastructure: "Infrastructure",
+  knowledge: "Knowledge",
+  publish: "Publish",
+  relationships: "Relationships",
+  work: "Work",
+}
+
+const MODULE_ICONS: Record<string, LucideIcon> = {
+  "api-tokens": KeyRound,
+  assistant: Bot,
+  blog: NotebookPen,
+  calendar: Calendar,
+  comments: MessageCircle,
+  "contact-form": UserSquare,
+  "data-export": Download,
+  home: HomeIcon,
+  "imap-inbox": Inbox,
+  journal: NotebookPen,
+  kanban: Kanban,
+  "llm-usage": Brain,
+  notes: FileText,
+  now: HomeIcon,
+  people: UsersRound,
+  pomodoro: AlarmClock,
+  projects: FolderGit2,
+  resources: Radio,
+  settings: Settings,
+  spreadsheets: Table,
+  timetable: Calendar,
+  timeline: FolderGit2,
+  triage: Brain,
+  whiteboard: PenTool,
+}
+
+const DESKTOP_SURFACES = new Set(["assistant", "home", "notes"])
+
+const EXTRA_KEYWORDS: Record<string, string[]> = {
+  "api-tokens": ["token", "keys", "developer"],
+  assistant: ["ai", "chat", "dashboard"],
+  "data-export": ["download", "backup"],
+  "imap-inbox": ["mail", "email"],
+  "llm-usage": ["usage", "billing", "credits"],
+  people: ["contacts", "crm", "relationships"],
+  pomodoro: ["timer", "focus"],
+  resources: ["infrastructure", "servers", "health"],
+  triage: ["email", "review"],
+  whiteboard: ["canvas", "drawing"],
+}
+
 export interface DesktopDashboardProps {
   token: string
   user: AppHeaderUser
@@ -76,6 +186,7 @@ export function DesktopDashboard({
     AssistantConversationSummary[]
   >([])
   const [displayUser, setDisplayUser] = useState(user)
+  const [enabledModules, setEnabledModules] = useState<Set<string>>(new Set())
   const [loadingList, setLoadingList] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isMac] = useState(() => platform() === "macos")
@@ -106,6 +217,7 @@ export function DesktopDashboard({
       email: response.user.email ?? response.authContext.userEmail,
       name: response.user.name ?? response.authContext.userName,
     })
+    setEnabledModules(new Set(response.authContext.enabledModules))
   }, [token])
 
   useEffect(() => {
@@ -114,6 +226,7 @@ export function DesktopDashboard({
     setApiWorkspaceId(null)
     setConversations([])
     setDisplayUser(user)
+    setEnabledModules(new Set())
     let cancelled = false
     apiClient.user
       .current()
@@ -124,6 +237,7 @@ export function DesktopDashboard({
           email: response.user.email ?? response.authContext.userEmail,
           name: response.user.name ?? response.authContext.userName,
         })
+        setEnabledModules(new Set(response.authContext.enabledModules))
         setReady(true)
       })
       .catch(() => {
@@ -134,9 +248,44 @@ export function DesktopDashboard({
     }
   }, [token, user])
 
+  const notesAvailable =
+    enabledModules.has("notes") && isFeatureEnabled("notes")
+
+  useEffect(() => {
+    if (surface === "notes" && !notesAvailable) {
+      setSurface("assistant")
+    }
+  }, [notesAvailable, surface])
+
   useEffect(() => {
     if (ready) void refresh()
   }, [ready, refresh])
+
+  const commandEntries = useMemo<CommandPaletteEntry[]>(
+    () =>
+      moduleDefinitions.map((definition) => {
+        const bundled = isFeatureEnabled(definition.id)
+        const implemented = DESKTOP_SURFACES.has(definition.id)
+        const enabled = enabledModules.has(definition.id)
+        const group = GROUP_LABELS[definition.group] ?? definition.group
+
+        return {
+          disabled: !enabled || !bundled || !implemented,
+          group,
+          icon: MODULE_ICONS[definition.id] ?? HomeIcon,
+          id: definition.id,
+          keywords: [
+            definition.name,
+            definition.id,
+            definition.group,
+            ...definition.requiredScopes,
+            ...(EXTRA_KEYWORDS[definition.id] ?? []),
+          ],
+          label: definition.nav.label,
+        }
+      }),
+    [enabledModules]
+  )
 
   const handleDelete = useCallback(
     async (id: string) => {
@@ -172,32 +321,42 @@ export function DesktopDashboard({
 
   if (surface === "notes") {
     return (
-      <NotesDashboard
-        client={apiClient}
-        headerClassName={isMac ? "pl-20" : undefined}
-        headerDragRegion
-        headerEndSlot={
-          <>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSurface("assistant")}
-            >
-              <MessageSquare className="size-3.5" />
-              Assistant
-            </Button>
-            <WindowControls />
-          </>
+      <Suspense
+        fallback={
+          <div className="flex h-svh items-center justify-center">
+            <Spinner className="size-5 text-muted-foreground" />
+          </div>
         }
-        onResolveWorkspace={resolveWorkspace}
-        onSignOut={async () => onDisconnect()}
-        user={displayUser}
-      />
+      >
+        <CommandPaletteOverlay
+          entries={commandEntries}
+          onSelect={(entry) => {
+            if (entry.id === "notes") setSurface("notes")
+            else setSurface("assistant")
+          }}
+        />
+        <NotesDashboard
+          client={apiClient}
+          headerClassName={isMac ? "pl-20" : undefined}
+          headerDragRegion
+          headerEndSlot={<WindowControls />}
+          onResolveWorkspace={resolveWorkspace}
+          onSignOut={async () => onDisconnect()}
+          user={displayUser}
+        />
+      </Suspense>
     )
   }
 
   return (
     <div className="flex h-svh w-full overflow-hidden bg-background">
+      <CommandPaletteOverlay
+        entries={commandEntries}
+        onSelect={(entry) => {
+          if (entry.id === "notes") setSurface("notes")
+          else setSurface("assistant")
+        }}
+      />
       <aside
         aria-hidden={!sidebarOpen}
         className={cn(
@@ -241,6 +400,7 @@ export function DesktopDashboard({
           endSlot={
             <>
               <Button
+                disabled={!notesAvailable}
                 variant="ghost"
                 size="sm"
                 onClick={() => setSurface("notes")}

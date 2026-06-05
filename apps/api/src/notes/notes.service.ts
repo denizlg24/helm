@@ -162,10 +162,15 @@ function isBlockedUrl(rawUrl: string): boolean {
   return PRIVATE_HOST_PATTERNS.some((pattern) => pattern.test(hostname))
 }
 
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
 function firstMeta(html: string, names: string[]): string | undefined {
   for (const name of names) {
+    const escaped = escapeRegex(name)
     const pattern = new RegExp(
-      `<meta[^>]+(?:name|property)=["']${name}["'][^>]+content=["']([^"']+)["'][^>]*>`,
+      `<meta[^>]+(?:name|property)=["']${escaped}["'][^>]+content=["']([^"']+)["'][^>]*>`,
       "iu"
     )
     const match = pattern.exec(html)
@@ -434,7 +439,7 @@ export class NotesService {
       .findOneAndUpdate(
         { ...this.repository.workspaceFilter(actor), id },
         { $set: patch },
-        { new: true }
+        { returnDocument: "after" }
       )
       .lean<NoteDocument>()
       .exec()
@@ -510,7 +515,7 @@ export class NotesService {
       .findOneAndUpdate(
         { ...this.repository.workspaceFilter(actor), id },
         { $set: input },
-        { new: true }
+        { returnDocument: "after" }
       )
       .lean<NoteGroupDocument>()
       .exec()
