@@ -58,7 +58,3 @@ export function applyCachedAppearanceSnapshot(): void {
   }
   setDark(mode === "dark")
 }
-
-export function isDarkActive(): boolean {
-  return document.documentElement.classList.contains("dark")
-}

@@ -233,14 +233,12 @@ export function App() {
       <header
         data-tauri-drag-region
         className={cn(
-          "flex h-12 shrink-0 items-center gap-2 border-border border-b px-3",
+          "flex min-h-12 shrink-0 items-center gap-2 border-border/70 border-b bg-background/92 px-3 backdrop-blur-sm",
           isMac && "pl-20"
         )}
       >
-        <Wordmark />
-        <div className="ml-auto self-stretch">
-          <WindowControls />
-        </div>
+        <Wordmark className="mr-auto" />
+        <WindowControls />
       </header>
       <main className="flex min-h-0 flex-1 items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm">

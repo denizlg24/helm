@@ -29,7 +29,6 @@ import {
 } from "@workspace/ui/components/command-palette-overlay"
 import { Spinner } from "@workspace/ui/components/spinner"
 import { buildSettingsUpdate } from "@workspace/ui/lib/settings"
-import { matchShortcut } from "@workspace/ui/lib/shortcuts"
 import { cn } from "@workspace/ui/lib/utils"
 import { SettingsView } from "@workspace/ui/settings/settings-view"
 import type { LucideIcon } from "lucide-react"
@@ -64,11 +63,7 @@ import {
   useState,
 } from "react"
 import { apiClient, setApiToken, setApiWorkspaceId } from "../lib/api"
-import {
-  applyAppearanceMode,
-  cacheAppearanceMode,
-  isDarkActive,
-} from "../lib/appearance"
+import { applyAppearanceMode, cacheAppearanceMode } from "../lib/appearance"
 import { featureGatedImport } from "../lib/feature-gated-import"
 import { isFeatureEnabled } from "../lib/features"
 import { WindowControls } from "./window-controls"
@@ -310,32 +305,6 @@ export function DesktopDashboard({
     },
     [settings]
   )
-
-  useEffect(() => {
-    const handleKeydown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.repeat) {
-        return
-      }
-      const target = event.target
-      if (
-        target instanceof HTMLElement &&
-        (target.isContentEditable ||
-          target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.tagName === "SELECT")
-      ) {
-        return
-      }
-      if (!matchShortcut(event, settings.shortcuts.toggleTheme)) {
-        return
-      }
-      event.preventDefault()
-      updateSetting("appearance.mode", isDarkActive() ? "light" : "dark")
-    }
-
-    window.addEventListener("keydown", handleKeydown)
-    return () => window.removeEventListener("keydown", handleKeydown)
-  }, [settings.shortcuts.toggleTheme, updateSetting])
 
   const commandEntries = useMemo<CommandPaletteEntry[]>(
     () =>

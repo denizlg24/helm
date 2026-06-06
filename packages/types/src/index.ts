@@ -125,14 +125,12 @@ export const AppearanceSettingsSchema = z.object({
 
 export const ShortcutSettingsSchema = z.object({
   commandPalette: ShortcutBindingSchema.default("mod+p"),
-  toggleTheme: ShortcutBindingSchema.default("d"),
 })
 
 export const UserSettingsSchema = z.object({
   appearance: AppearanceSettingsSchema.default({ mode: "system" }),
   shortcuts: ShortcutSettingsSchema.default({
     commandPalette: "mod+p",
-    toggleTheme: "d",
   }),
   // Per-module user preferences keyed by module id. Each module validates its
   // own slice when it declares fields; opaque here.

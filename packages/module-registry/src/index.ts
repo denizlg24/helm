@@ -439,12 +439,4 @@ export const settingsFields = [
     scope: "both",
     control: "shortcut",
   },
-  {
-    key: "shortcuts.toggleTheme",
-    label: "Toggle light / dark",
-    description: "Switch between light and dark mode.",
-    group: "general",
-    scope: "both",
-    control: "shortcut",
-  },
 ] as const satisfies readonly SettingsFieldDescriptor[]

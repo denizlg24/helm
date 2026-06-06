@@ -2,7 +2,6 @@
 
 import { type UserSettings, UserSettingsSchema } from "@workspace/types"
 import { buildSettingsUpdate } from "@workspace/ui/lib/settings"
-import { matchShortcut } from "@workspace/ui/lib/shortcuts"
 import { useTheme } from "next-themes"
 import {
   createContext,
@@ -35,21 +34,9 @@ export function useSettings(): SettingsContextValue {
   return context
 }
 
-function isTypingTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
-    return false
-  }
-  return (
-    target.isContentEditable ||
-    target.tagName === "INPUT" ||
-    target.tagName === "TEXTAREA" ||
-    target.tagName === "SELECT"
-  )
-}
-
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const { data: session, isPending } = authClient.useSession()
-  const { resolvedTheme, setTheme } = useTheme()
+  const { setTheme } = useTheme()
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS)
   const [status, setStatus] = useState<SettingsStatus>("loading")
 
@@ -114,31 +101,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     },
     [settings]
   )
-
-  useEffect(() => {
-    if (status !== "ready") {
-      return
-    }
-    const handleKeydown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.repeat) {
-        return
-      }
-      if (isTypingTarget(event.target)) {
-        return
-      }
-      if (!matchShortcut(event, settings.shortcuts.toggleTheme)) {
-        return
-      }
-      event.preventDefault()
-      updateSetting(
-        "appearance.mode",
-        resolvedTheme === "dark" ? "light" : "dark"
-      )
-    }
-
-    window.addEventListener("keydown", handleKeydown)
-    return () => window.removeEventListener("keydown", handleKeydown)
-  }, [status, settings.shortcuts.toggleTheme, resolvedTheme, updateSetting])
 
   return (
     <SettingsContext.Provider value={{ settings, status, updateSetting }}>

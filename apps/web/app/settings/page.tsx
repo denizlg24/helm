@@ -36,7 +36,7 @@ export default function SettingsPage() {
   return (
     <main className="min-h-svh bg-background">
       <header className="border-b">
-        <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-4 py-4">
+        <div className="mx-auto flex w-full max-w-5xl items-center gap-3 px-4 py-4">
           <Button
             type="button"
             variant="ghost"
@@ -46,7 +46,7 @@ export default function SettingsPage() {
           >
             <ArrowLeft className="size-4" />
           </Button>
-          <h1 className="font-medium text-lg">Settings</h1>
+          <h1 className="font-medium text-lg">settings</h1>
         </div>
       </header>
 
