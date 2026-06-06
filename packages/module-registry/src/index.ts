@@ -417,6 +417,7 @@ export const settingsGroups = [
     id: "general",
     label: "General",
     description: "Appearance and keyboard shortcuts.",
+    icon: "SlidersHorizontal",
     platform: "both",
   },
 ] as const satisfies readonly SettingsGroupDescriptor[]

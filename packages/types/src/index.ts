@@ -169,6 +169,8 @@ export const SettingsGroupDescriptorSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
   description: z.string().optional(),
+  // Lucide icon name shown in the settings group nav. Resolved by the UI.
+  icon: z.string().min(1).optional(),
   platform: SettingsScopeSchema.default("both"),
 })
 
