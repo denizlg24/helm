@@ -20,6 +20,7 @@ import { toast } from "@workspace/ui/components/sonner"
 import { Spinner } from "@workspace/ui/components/spinner"
 import { useIsMobile } from "@workspace/ui/hooks/use-mobile"
 import { cn } from "@workspace/ui/lib/utils"
+import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
 import { apiClient, setActiveWorkspaceId } from "../lib/api"
 
@@ -32,6 +33,7 @@ export interface DashboardHomeProps {
 }
 
 export function DashboardHome({ user, onSignOut }: DashboardHomeProps) {
+  const router = useRouter()
   const isMobile = useIsMobile()
   const [ready, setReady] = useState(false)
   const [conversations, setConversations] = useState<
@@ -166,6 +168,7 @@ export function DashboardHome({ user, onSignOut }: DashboardHomeProps) {
           sidebarOpen={sidebarOpen}
           onToggleSidebar={() => setSidebarOpen((open) => !open)}
           user={user}
+          onSettings={() => router.push("/settings")}
           onLogout={() => void onSignOut()}
           backgroundItems={[]}
           notifications={[]}

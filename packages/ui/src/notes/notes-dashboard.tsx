@@ -92,6 +92,7 @@ export interface NotesClient {
 export interface NotesDashboardProps {
   user: AppHeaderUser
   onSignOut: () => Promise<void>
+  onSettings?: () => void
   onResolveWorkspace: () => Promise<void>
   client: NotesClient
   headerClassName?: string
@@ -229,6 +230,7 @@ function mergePatchedNote(current: Note, server: Note, input: UpdateNoteInput) {
 export function NotesDashboard({
   user,
   onSignOut,
+  onSettings,
   onResolveWorkspace,
   client,
   headerClassName,
@@ -621,6 +623,7 @@ export function NotesDashboard({
       dragRegion={headerDragRegion}
       sidebarOpen={false}
       user={user}
+      onSettings={onSettings}
       onLogout={() => void onSignOut()}
       backgroundItems={[]}
       notifications={[]}
@@ -686,7 +689,7 @@ export function NotesDashboard({
             </span>
           </div>
 
-          <div className="sm:ml-2 flex grow items-center gap-2">
+          <div className="flex grow items-center gap-2 sm:ml-2">
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -782,7 +785,7 @@ export function NotesDashboard({
             value={hasUrlFilter}
             onValueChange={(value) => setHasUrlFilter(value as HasUrlFilter)}
           >
-            <SelectTrigger size="sm" className="sm:ml-auto w-32 text-xs">
+            <SelectTrigger size="sm" className="w-32 text-xs sm:ml-auto">
               <div className="flex h-4! items-center gap-1.5">
                 <Link2 className="size-3.5" />
                 <SelectValue />

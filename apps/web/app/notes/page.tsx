@@ -101,6 +101,7 @@ export default function NotesPage() {
         router.replace("/sign-in")
         router.refresh()
       }}
+      onSettings={() => router.push("/settings")}
       onResolveWorkspace={resolveWorkspace}
       client={apiClient}
     />

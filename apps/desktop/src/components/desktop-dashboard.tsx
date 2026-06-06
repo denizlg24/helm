@@ -471,6 +471,7 @@ export function DesktopDashboard({
           headerDragRegion
           headerEndSlot={<WindowControls />}
           onResolveWorkspace={resolveWorkspace}
+          onSettings={() => setSurface("settings")}
           onSignOut={async () => onDisconnect()}
           user={displayUser}
         />
@@ -522,6 +523,7 @@ export function DesktopDashboard({
           sidebarOpen={sidebarOpen}
           onToggleSidebar={() => setSidebarOpen((open) => !open)}
           user={displayUser}
+          onSettings={() => setSurface("settings")}
           onLogout={onDisconnect}
           backgroundItems={[]}
           notifications={[]}
