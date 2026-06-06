@@ -1,12 +1,11 @@
 "use client"
 
 import { type UserSettings, UserSettingsSchema } from "@workspace/types"
-import { buildSettingsUpdate } from "@workspace/ui/lib/settings"
+import { useSettingsUpdater } from "@workspace/ui/lib/use-settings-updater"
 import { useTheme } from "next-themes"
 import {
   createContext,
   type ReactNode,
-  useCallback,
   useContext,
   useEffect,
   useState,
@@ -82,25 +81,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setTheme(settings.appearance.mode)
   }, [status, settings.appearance.mode, setTheme])
 
-  const updateSetting = useCallback(
-    (key: string, value: unknown) => {
-      const prev = settings
-      const { settings: next, patch } = buildSettingsUpdate(
-        settings,
-        key,
-        value
-      )
-      setSettings(next)
-      apiClient.user
-        .updateSettings(patch)
-        .then((response) => setSettings(response.settings))
-        .catch((error) => {
-          console.error("Failed to save settings:", error)
-          setSettings(prev)
-        })
-    },
-    [settings]
-  )
+  const updateSetting = useSettingsUpdater({
+    settings,
+    setSettings,
+    persist: (patch) => apiClient.user.updateSettings(patch),
+    onError: (error) => console.error("Failed to save settings:", error),
+  })
 
   return (
     <SettingsContext.Provider value={{ settings, status, updateSetting }}>

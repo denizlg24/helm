@@ -28,7 +28,7 @@ import {
   CommandPaletteOverlay,
 } from "@workspace/ui/components/command-palette-overlay"
 import { Spinner } from "@workspace/ui/components/spinner"
-import { buildSettingsUpdate } from "@workspace/ui/lib/settings"
+import { useSettingsUpdater } from "@workspace/ui/lib/use-settings-updater"
 import { cn } from "@workspace/ui/lib/utils"
 import { SettingsView } from "@workspace/ui/settings/settings-view"
 import type { LucideIcon } from "lucide-react"
@@ -280,31 +280,13 @@ export function DesktopDashboard({
     [settings.appearance.mode]
   )
 
-  const updateSetting = useCallback(
-    (key: string, value: unknown) => {
-      const previous = settings
-      const previousMode = previous.appearance.mode
-      const { settings: next, patch } = buildSettingsUpdate(
-        settings,
-        key,
-        value
-      )
-      setSettings(next)
-      cacheAppearanceMode(next.appearance.mode)
-      apiClient.user
-        .updateSettings(patch)
-        .then((response) => {
-          cacheAppearanceMode(response.settings.appearance.mode)
-          setSettings(response.settings)
-        })
-        .catch((error) => {
-          console.error("Failed to save settings:", error)
-          setSettings(previous)
-          cacheAppearanceMode(previousMode)
-        })
-    },
-    [settings]
-  )
+  const updateSetting = useSettingsUpdater({
+    settings,
+    setSettings,
+    persist: (patch) => apiClient.user.updateSettings(patch),
+    onChange: (next) => cacheAppearanceMode(next.appearance.mode),
+    onError: (error) => console.error("Failed to save settings:", error),
+  })
 
   const commandEntries = useMemo<CommandPaletteEntry[]>(
     () =>
