@@ -24,6 +24,9 @@ export default defineConfig({
       "@workspace/api-client": resolveSrc(
         "../../packages/api-client/src/index.ts"
       ),
+      "@workspace/assistant-tools": resolveSrc(
+        "../../packages/assistant-tools/src/index.ts"
+      ),
       "@workspace/types": resolveSrc("../../packages/types/src/index.ts"),
       "@workspace/module-registry": resolveSrc(
         "../../packages/module-registry/src/index.ts"
