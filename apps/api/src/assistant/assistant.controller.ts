@@ -13,6 +13,7 @@ import {
   type AuthContext,
   RenameAssistantConversationInputSchema,
   StartAssistantChatInputSchema,
+  SubmitAssistantToolResultInputSchema,
 } from "@workspace/types"
 import type { FastifyReply } from "fastify"
 import { z } from "zod"
@@ -116,6 +117,30 @@ export class AssistantController {
     const emit = this.openStream(reply)
     try {
       await this.assistant.approve(actor, validatedId, input, emit.send)
+    } finally {
+      emit.close()
+    }
+  }
+
+  @Post("conversations/:id/tool-result")
+  @RequireScopes("assistant:write")
+  @RateLimit({ max: 240, windowMs: 10 * 60 * 1000 })
+  async toolResult(
+    @CurrentAuthContext() actor: AuthContext,
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Res() reply: FastifyReply
+  ) {
+    const validatedId = ConversationIdSchema.parse(id)
+    const input = SubmitAssistantToolResultInputSchema.parse(body)
+    const emit = this.openStream(reply)
+    try {
+      await this.assistant.submitToolResult(
+        actor,
+        validatedId,
+        input,
+        emit.send
+      )
     } finally {
       emit.close()
     }

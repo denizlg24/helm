@@ -2,11 +2,13 @@
 
 import {
   AppearanceModeSchema,
+  AssistantDockPositionSchema,
   type SettingsFieldDescriptor,
   type SettingsGroupDescriptor,
   type UserSettings,
 } from "@workspace/types"
 import { cn } from "@workspace/ui/lib/utils"
+import { AssistantDockPositionControl } from "@workspace/ui/settings/controls/assistant-dock-position-control"
 import { ShortcutRecorder } from "@workspace/ui/settings/controls/shortcut-recorder"
 import { ThemeModeControl } from "@workspace/ui/settings/controls/theme-mode-control"
 import {
@@ -79,6 +81,13 @@ function FieldControl({
       return (
         <ShortcutRecorder
           value={typeof raw === "string" ? raw : ""}
+          onChange={(value) => onChange(field.key, value)}
+        />
+      )
+    case "assistant-dock-position":
+      return (
+        <AssistantDockPositionControl
+          value={AssistantDockPositionSchema.catch("bottom-right").parse(raw)}
           onChange={(value) => onChange(field.key, value)}
         />
       )

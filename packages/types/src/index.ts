@@ -127,11 +127,24 @@ export const ShortcutSettingsSchema = z.object({
   commandPalette: ShortcutBindingSchema.default("mod+p"),
 })
 
+// Which corner the floating assistant dock anchors to on non-home surfaces.
+export const AssistantDockPositionSchema = z.enum([
+  "bottom-right",
+  "bottom-left",
+  "top-right",
+  "top-left",
+])
+
+export const AssistantSettingsSchema = z.object({
+  dockPosition: AssistantDockPositionSchema.default("bottom-right"),
+})
+
 export const UserSettingsSchema = z.object({
   appearance: AppearanceSettingsSchema.default({ mode: "system" }),
   shortcuts: ShortcutSettingsSchema.default({
     commandPalette: "mod+p",
   }),
+  assistant: AssistantSettingsSchema.default({ dockPosition: "bottom-right" }),
   // Per-module user preferences keyed by module id. Each module validates its
   // own slice when it declares fields; opaque here.
   modules: z.record(z.string(), z.record(z.string(), z.unknown())).default({}),
@@ -140,6 +153,7 @@ export const UserSettingsSchema = z.object({
 export const UpdateUserSettingsInputSchema = z.object({
   appearance: AppearanceSettingsSchema.partial().optional(),
   shortcuts: ShortcutSettingsSchema.partial().optional(),
+  assistant: AssistantSettingsSchema.partial().optional(),
   modules: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
 })
 
@@ -150,7 +164,11 @@ export const UserSettingsResponseSchema = z.object({
 // Declarative settings field/group descriptors used to render the settings UI.
 // Field/group data lives in packages/module-registry; the UI iterates these.
 export const SettingsScopeSchema = z.enum(["both", "web", "desktop"])
-export const SettingsControlSchema = z.enum(["theme-mode", "shortcut"])
+export const SettingsControlSchema = z.enum([
+  "theme-mode",
+  "shortcut",
+  "assistant-dock-position",
+])
 
 export const SettingsFieldDescriptorSchema = z.object({
   // Dot path into UserSettings, e.g. "appearance.mode" or "shortcuts.commandPalette".
@@ -648,11 +666,17 @@ export const AssistantMessageSchema = z.object({
 
 // Set on a conversation while it waits for the user to approve/deny a high-risk
 // tool the model requested. The turn is suspended until the decision arrives.
+// A suspended turn awaiting external resolution. `approval` waits for the user
+// to approve/deny a server tool; `client_tool` waits for the client to execute
+// a tool and post its result. `resultMessageId` is the user message the
+// resolved tool_result block is pushed into (client_tool only).
 export const AssistantPendingApprovalSchema = z.object({
+  kind: z.enum(["approval", "client_tool"]).default("approval"),
   messageId: z.string().min(1),
   toolUseId: z.string().min(1),
   name: z.string().min(1),
   input: z.record(z.string(), z.unknown()),
+  resultMessageId: z.string().min(1).optional(),
 })
 
 export const AssistantConversationSchema = z.object({
@@ -695,6 +719,25 @@ export const AssistantAttachmentInputSchema = z.object({
   fileId: z.string().min(1),
 })
 
+// Where the user is when they send a turn. Attached per-turn, woven into the
+// system prompt, and stashed on the conversation so resumes (approve /
+// tool-result) keep the same grounding. Each module surface publishes this.
+export const AssistantSurfaceContextSchema = z.object({
+  // Owning module id, e.g. "notes" (matches module-registry ids).
+  module: z.string().min(1),
+  // Current route path, e.g. "/notes" or "/notes/graph".
+  route: z.string().min(1),
+  // The kind of entity in focus, e.g. "note", "note_group".
+  entityType: z.string().min(1).optional(),
+  // The focused entity's id, e.g. the open note or selected group.
+  entityId: z.string().min(1).optional(),
+  // Free-text selection or excerpt the user has highlighted.
+  selection: z.string().max(8_000).optional(),
+  // Module-specific extras (e.g. open note content) the surface chooses to
+  // expose. Kept open-ended so surfaces don't need bespoke schemas.
+  payload: z.record(z.string(), z.unknown()).optional(),
+})
+
 export const StartAssistantChatInputSchema = z
   .object({
     // Null/omitted starts a new conversation; the server returns its id in the
@@ -705,6 +748,7 @@ export const StartAssistantChatInputSchema = z
     model: AssistantModelIdSchema.default(DEFAULT_ASSISTANT_MODEL_ID),
     webSearch: z.boolean().default(false),
     tools: z.boolean().default(true),
+    context: AssistantSurfaceContextSchema.optional(),
   })
   .refine(
     (input) =>
@@ -719,6 +763,14 @@ export const StartAssistantChatInputSchema = z
 export const ApproveAssistantToolInputSchema = z.object({
   toolUseId: z.string().min(1),
   decision: z.enum(["approve", "deny"]),
+})
+
+// Resolves a suspended client tool. The client executes the tool against live
+// UI state, then posts the serialized result back to resume the turn.
+export const SubmitAssistantToolResultInputSchema = z.object({
+  toolUseId: z.string().min(1),
+  result: z.string().max(32_000),
+  isError: z.boolean().default(false),
 })
 
 // Wire protocol for the SSE stream. The client reduces these into message state.
@@ -748,6 +800,14 @@ export const AssistantStreamEventSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("tool_approval_required"),
+    toolUseId: z.string().min(1),
+    name: z.string().min(1),
+    input: z.record(z.string(), z.unknown()),
+  }),
+  // The turn is suspended awaiting a client-executed tool. The client runs the
+  // tool against live UI state and posts the result via /tool-result to resume.
+  z.object({
+    type: z.literal("client_tool_call"),
     toolUseId: z.string().min(1),
     name: z.string().min(1),
     input: z.record(z.string(), z.unknown()),
@@ -921,6 +981,12 @@ export type StartAssistantChatInput = z.infer<
 >
 export type ApproveAssistantToolInput = z.infer<
   typeof ApproveAssistantToolInputSchema
+>
+export type SubmitAssistantToolResultInput = z.infer<
+  typeof SubmitAssistantToolResultInputSchema
+>
+export type AssistantSurfaceContext = z.infer<
+  typeof AssistantSurfaceContextSchema
 >
 export type AssistantStreamEvent = z.infer<typeof AssistantStreamEventSchema>
 
@@ -1359,6 +1425,8 @@ export type UpdateUserSettingsInput = z.infer<
   typeof UpdateUserSettingsInputSchema
 >
 export type UserSettingsResponse = z.infer<typeof UserSettingsResponseSchema>
+export type AssistantDockPosition = z.infer<typeof AssistantDockPositionSchema>
+export type AssistantSettings = z.infer<typeof AssistantSettingsSchema>
 export type SettingsScope = z.infer<typeof SettingsScopeSchema>
 export type SettingsControl = z.infer<typeof SettingsControlSchema>
 export type SettingsFieldDescriptor = z.infer<

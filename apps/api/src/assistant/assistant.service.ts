@@ -9,6 +9,7 @@ import type {
   AssistantStreamEvent,
   AuthContext,
   StartAssistantChatInput,
+  SubmitAssistantToolResultInput,
 } from "@workspace/types"
 // biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
 import { StorageService } from "../storage/storage.service"
@@ -150,6 +151,16 @@ export class AssistantService {
       toolsEnabled: input.tools,
     }
 
+    // Stash the surface context so resumes (approve / tool-result) stay grounded
+    // even though they carry no fresh context of their own.
+    const surfaceContext = input.context ?? null
+    await this.repo.setContext(
+      actor.workspaceId,
+      conversation._id,
+      surfaceContext
+    )
+    conversation = { ...conversation, lastContext: surfaceContext }
+
     const existing = await this.repo.listMessages(
       actor.workspaceId,
       conversation._id
@@ -254,6 +265,71 @@ export class AssistantService {
       input.decision === "approve"
         ? { approvedToolUseId: input.toolUseId }
         : { deniedToolUseId: input.toolUseId }
+    )
+  }
+
+  // Resolves a suspended client tool: records the result the client produced
+  // and resumes the turn. The loop continues against the recorded tool_result.
+  async submitToolResult(
+    actor: AuthContext,
+    conversationId: string,
+    input: SubmitAssistantToolResultInput,
+    emit: EmitFn
+  ): Promise<void> {
+    const conversation = await this.repo.getConversation(
+      actor.workspaceId,
+      conversationId
+    )
+    if (!conversation) {
+      emit({
+        type: "error",
+        code: "CONVERSATION_NOT_FOUND",
+        message: "Conversation not found",
+      })
+      emit({ type: "done", stopReason: "error" })
+      return
+    }
+
+    const pending = conversation.pendingApproval
+    if (
+      !pending ||
+      pending.kind !== "client_tool" ||
+      pending.toolUseId !== input.toolUseId ||
+      !pending.resultMessageId
+    ) {
+      emit({
+        type: "error",
+        code: "NO_PENDING_CLIENT_TOOL",
+        message: "No matching pending client tool for this conversation.",
+      })
+      emit({ type: "done", stopReason: "error" })
+      return
+    }
+
+    const block: AssistantContentBlock = {
+      type: "tool_result",
+      toolUseId: input.toolUseId,
+      content: input.result,
+      ...(input.isError ? { isError: true } : {}),
+    }
+    await this.repo.pushBlock(actor.workspaceId, pending.resultMessageId, block)
+    if (pending.messageId) {
+      await this.repo.updateMessage(actor.workspaceId, pending.messageId, {
+        status: "complete",
+      })
+    }
+    await this.repo.setPendingApproval(actor.workspaceId, conversationId, null)
+
+    emit({
+      type: "conversation",
+      conversationId: conversation._id,
+      title: conversation.title,
+    })
+
+    await this.stream.runConversation(
+      actor,
+      { ...conversation, pendingApproval: null },
+      emit
     )
   }
 }

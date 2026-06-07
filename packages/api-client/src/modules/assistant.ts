@@ -9,6 +9,8 @@ import {
   RenameAssistantConversationInputSchema,
   type StartAssistantChatInput,
   StartAssistantChatInputSchema,
+  type SubmitAssistantToolResultInput,
+  SubmitAssistantToolResultInputSchema,
 } from "@workspace/types"
 import type { HelmApiRequestClient } from "../types"
 
@@ -66,6 +68,19 @@ export const createAssistantModule = ({
     stream(
       `/api/assistant/conversations/${encodeURIComponent(conversationId)}/approve`,
       ApproveAssistantToolInputSchema.parse(input),
+      (value) => AssistantStreamEventSchema.parse(value),
+      signal
+    ),
+
+  // Submits a client-executed tool's result and resumes streaming.
+  submitToolResult: (
+    conversationId: string,
+    input: SubmitAssistantToolResultInput,
+    signal?: AbortSignal
+  ) =>
+    stream(
+      `/api/assistant/conversations/${encodeURIComponent(conversationId)}/tool-result`,
+      SubmitAssistantToolResultInputSchema.parse(input),
       (value) => AssistantStreamEventSchema.parse(value),
       signal
     ),

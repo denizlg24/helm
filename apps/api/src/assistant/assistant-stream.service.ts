@@ -1,8 +1,10 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import { Injectable, Logger } from "@nestjs/common"
+import { getAssistantToolDeclaration } from "@workspace/assistant-tools"
 import type {
   AssistantContentBlock,
   AssistantStreamEvent,
+  AssistantSurfaceContext,
   AuthContext,
 } from "@workspace/types"
 import { computeAnthropicUsage } from "../llm/llm.constants"
@@ -17,11 +19,9 @@ import {
   AssistantRepository,
   type ConversationDoc,
 } from "./assistant.repository"
-import {
-  type AssistantTool,
-  getAssistantTool,
-  getAssistantToolDefinitions,
-} from "./assistant-tools"
+import type { AssistantServerToolHandler } from "./assistant-tool.types"
+// biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
+import { AssistantToolRegistry } from "./assistant-tool-registry.service"
 
 const MAX_LOOP_ITERATIONS = 24
 type AssistantImageMimeType =
@@ -82,7 +82,34 @@ Tone:
 const formatPromptValue = (value: string | undefined): string =>
   value?.trim() ? value.trim() : "Unknown"
 
-const buildSystemPrompt = (actor: AuthContext): string => `${SYSTEM_PROMPT}
+// Renders the user's current surface (where they are, what they're looking at)
+// so the assistant can act on "this note" / "this group" without re-asking. The
+// `payload` is JSON-stringified and bounded to avoid bloating the prompt.
+const formatSurfaceContext = (
+  surface: AssistantSurfaceContext | undefined
+): string => {
+  if (!surface) return ""
+  const lines = [`- Module: ${surface.module}`, `- Route: ${surface.route}`]
+  if (surface.entityType)
+    lines.push(`- Focused entity type: ${surface.entityType}`)
+  if (surface.entityId) lines.push(`- Focused entity id: ${surface.entityId}`)
+  if (surface.selection) {
+    lines.push(`- Current selection: ${surface.selection.slice(0, 2000)}`)
+  }
+  if (surface.payload) {
+    const payload = JSON.stringify(surface.payload).slice(0, 4000)
+    lines.push(`- Surface details: ${payload}`)
+  }
+  return `
+
+The user is currently on this surface. Use it to resolve references like "this note", "here", or "this group", and to choose sensible defaults for tool inputs:
+${lines.join("\n")}`
+}
+
+const buildSystemPrompt = (
+  actor: AuthContext,
+  surface: AssistantSurfaceContext | undefined
+): string => `${SYSTEM_PROMPT}
 
 Current Helm context:
 - User name: ${formatPromptValue(actor.userName)}
@@ -90,7 +117,7 @@ Current Helm context:
 - Workspace name: ${formatPromptValue(actor.workspaceName)}
 - Workspace role: ${actor.role}
 
-Use this context to address the user naturally and keep workspace-specific answers grounded.`
+Use this context to address the user naturally and keep workspace-specific answers grounded.${formatSurfaceContext(surface)}`
 
 // Anthropic server-side web search tool, added when the conversation toggles it
 // on. Resolved entirely server-side; we never execute it.
@@ -120,7 +147,8 @@ export class AssistantStreamService {
     private readonly llm: LlmService,
     private readonly repo: AssistantRepository,
     private readonly mongo: MongoService,
-    private readonly storage: StorageService
+    private readonly storage: StorageService,
+    private readonly tools: AssistantToolRegistry
   ) {}
 
   // Drives a conversation to completion or suspension, emitting SSE events.
@@ -184,7 +212,7 @@ export class AssistantStreamService {
 
     const tools: Anthropic.ToolUnion[] = []
     if (conversation.toolsEnabled) {
-      for (const tool of getAssistantToolDefinitions()) tools.push(tool)
+      for (const tool of this.tools.toolDefinitions()) tools.push(tool)
     }
     if (conversation.webSearchEnabled) tools.push(WEB_SEARCH_TOOL)
 
@@ -216,7 +244,7 @@ export class AssistantStreamService {
 
       const stream = await this.llm.streamAnthropic(actor, working, {
         model: conversation.model,
-        system: buildSystemPrompt(actor),
+        system: buildSystemPrompt(actor, conversation.lastContext ?? undefined),
         cacheSystem: true,
         feature: "assistant",
         ...(tools.length > 0 ? { tools } : {}),
@@ -242,18 +270,26 @@ export class AssistantStreamService {
 
       const final = await stream.finalMessage()
       const usage = computeAnthropicUsage(conversation.model, final.usage)
+      // What the user sees as "tokens" is the uncached transcript they drove —
+      // context + their message + tool results. The system prompt is cached, so
+      // it surfaces as cache_* tokens; we exclude it here. Cost stays full
+      // (computeAnthropicUsage already prices the cached system).
+      const displayUsage = {
+        ...usage,
+        inputTokens: final.usage.input_tokens ?? 0,
+      }
       const blocks = mapFinalToBlocks(final.content)
       await this.repo.updateMessage(actor.workspaceId, shell._id, {
         blocks,
         status: "complete",
-        usage,
+        usage: displayUsage,
       })
       emit({
         type: "usage",
         messageId: shell._id,
-        inputTokens: usage.inputTokens,
-        outputTokens: usage.outputTokens,
-        costUsdCents: usage.costUsdCents,
+        inputTokens: displayUsage.inputTokens,
+        outputTokens: displayUsage.outputTokens,
+        costUsdCents: displayUsage.costUsdCents,
       })
       for (const block of blocks) {
         if (block.type === "tool_use") toolOwner.set(block.id, shell._id)
@@ -305,10 +341,10 @@ export class AssistantStreamService {
     const content = asBlockArray(resultTurn.content)
 
     for (const use of unresolved) {
-      const tool = getAssistantTool(use.name)
+      const declaration = getAssistantToolDeclaration(use.name)
       const ownerId = toolOwner.get(use.id)
 
-      if (!tool) {
+      if (!declaration) {
         await this.persistResult(
           actor,
           resultMessageId,
@@ -321,9 +357,48 @@ export class AssistantStreamService {
         continue
       }
 
+      // Client tools execute in the browser against live UI state. Suspend the
+      // turn, hand the call to the client, and wait for /tool-result.
+      if (declaration.side === "client") {
+        await this.repo.setPendingApproval(
+          actor.workspaceId,
+          conversation._id,
+          {
+            kind: "client_tool",
+            messageId: ownerId ?? "",
+            toolUseId: use.id,
+            name: use.name,
+            input: use.input,
+            resultMessageId,
+          }
+        )
+        emit({
+          type: "client_tool_call",
+          toolUseId: use.id,
+          name: use.name,
+          input: use.input,
+        })
+        emit({ type: "done", stopReason: "tool_use" })
+        return true
+      }
+
+      const handler = this.tools.getServerHandler(use.name)
+      if (!handler) {
+        await this.persistResult(
+          actor,
+          resultMessageId,
+          content,
+          emit,
+          use.id,
+          `No server handler registered for tool: ${use.name}`,
+          true
+        )
+        continue
+      }
+
       const denied = options.deniedToolUseId === use.id
       const approved =
-        tool.risk === "auto" || options.approvedToolUseId === use.id
+        declaration.risk === "auto" || options.approvedToolUseId === use.id
 
       if (denied) {
         if (ownerId) {
@@ -344,16 +419,16 @@ export class AssistantStreamService {
       }
 
       if (!approved) {
-        const pending = {
-          messageId: ownerId ?? "",
-          toolUseId: use.id,
-          name: use.name,
-          input: use.input,
-        }
         await this.repo.setPendingApproval(
           actor.workspaceId,
           conversation._id,
-          pending
+          {
+            kind: "approval",
+            messageId: ownerId ?? "",
+            toolUseId: use.id,
+            name: use.name,
+            input: use.input,
+          }
         )
         if (ownerId) {
           await this.repo.updateMessage(actor.workspaceId, ownerId, {
@@ -376,7 +451,12 @@ export class AssistantStreamService {
         name: use.name,
         input: use.input,
       })
-      const { output, isError } = await this.execTool(actor, tool, use.input)
+      const { output, isError } = await this.execTool(
+        actor,
+        handler,
+        use.input,
+        conversation.lastContext ?? undefined
+      )
       if (ownerId) {
         await this.repo.updateMessage(actor.workspaceId, ownerId, {
           status: "complete",
@@ -428,11 +508,15 @@ export class AssistantStreamService {
 
   private async execTool(
     actor: AuthContext,
-    tool: AssistantTool,
-    input: Record<string, unknown>
+    handler: AssistantServerToolHandler,
+    input: Record<string, unknown>,
+    surface: AssistantSurfaceContext | undefined
   ): Promise<{ output: string; isError: boolean }> {
     try {
-      const output = await tool.run({ actor, mongo: this.mongo }, input)
+      const output = await handler.run(
+        { actor, mongo: this.mongo, llm: this.llm, surface },
+        input
+      )
       return { output, isError: false }
     } catch (error) {
       return {
@@ -645,7 +729,7 @@ function unresolvedCustomToolUses(
     for (const block of turn.content) {
       if (
         block.type === "tool_use" &&
-        getAssistantTool(block.name) &&
+        getAssistantToolDeclaration(block.name) &&
         !resolved.has(block.id)
       ) {
         unresolved.push({

@@ -59,6 +59,12 @@ export interface ChatViewProps {
   suggestion?: string
   /** Prompt ideas cross-faded under the clock; falls back to a built-in set. */
   suggestions?: readonly string[]
+  /**
+   * Empty-state layout. "center" floats the clock + composer in the middle
+   * (full-page home). "bottom" pins the composer at the bottom with the clock
+   * up top, matching the dock's chat layout.
+   */
+  composerPlacement?: "center" | "bottom"
   className?: string
 }
 
@@ -67,6 +73,7 @@ export function ChatView({
   onSelectFiles,
   suggestion,
   suggestions,
+  composerPlacement = "center",
   className,
 }: ChatViewProps) {
   const isEmpty = chat.messages.length === 0
@@ -99,6 +106,35 @@ export function ChatView({
   ) : null
 
   if (isEmpty) {
+    const hero = (
+      <>
+        <AssistantClock />
+        <div className="mt-6">
+          <RotatingSuggestion
+            suggestions={
+              suggestions ?? (suggestion ? [suggestion] : DEFAULT_SUGGESTIONS)
+            }
+          />
+        </div>
+      </>
+    )
+
+    if (composerPlacement === "bottom") {
+      return (
+        <div className={cn("flex h-full flex-col", className)}>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="mx-auto w-full max-w-2xl px-4 pt-10">{hero}</div>
+          </div>
+          <div className="bg-background/80 backdrop-blur">
+            <div className="mx-auto w-full max-w-3xl px-4 py-3">
+              {errorBanner ? <div className="mb-2">{errorBanner}</div> : null}
+              {composer}
+            </div>
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div
         className={cn(
@@ -107,14 +143,7 @@ export function ChatView({
         )}
       >
         <div className="w-full max-w-2xl">
-          <AssistantClock />
-          <div className="mt-6">
-            <RotatingSuggestion
-              suggestions={
-                suggestions ?? (suggestion ? [suggestion] : DEFAULT_SUGGESTIONS)
-              }
-            />
-          </div>
+          {hero}
           <div className="mt-5">{composer}</div>
           {errorBanner ? <div className="mt-3">{errorBanner}</div> : null}
         </div>

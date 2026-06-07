@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@workspace/api-client": "workspace:*",
+    "@workspace/assistant-commands": "workspace:*",
+    "@workspace/assistant-tools": "workspace:*",
     "@workspace/types": "workspace:*",
     "@workspace/ui": "workspace:*",
     "lucide-react": "^1.16.0",

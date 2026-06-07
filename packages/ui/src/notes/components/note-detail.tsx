@@ -415,7 +415,6 @@ export function NoteDetail({
               onSaveContent={async (content) => {
                 await onPatch({ content })
               }}
-              showAiControls
             />
           </div>
         </div>

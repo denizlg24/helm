@@ -59,6 +59,7 @@
     "./postcss.config": "./postcss.config.mjs",
     "./lib/*": "./src/lib/*.ts",
     "./components/*": "./src/components/*.tsx",
+    "./assistant/*": "./src/assistant/*.tsx",
     "./notes/*": "./src/notes/*.tsx",
     "./settings/*": "./src/settings/*.tsx",
     "./hooks/*": "./src/hooks/*.ts"

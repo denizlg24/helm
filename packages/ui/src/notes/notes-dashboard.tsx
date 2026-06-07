@@ -30,6 +30,7 @@ import {
   useMemo,
   useState,
 } from "react"
+import { useModuleDataInvalidation } from "../assistant/bridge"
 import type { AppHeaderUser } from "../components/app-header"
 import { AppHeader } from "../components/app-header"
 import { Button } from "../components/button"
@@ -283,6 +284,12 @@ export function NotesDashboard({
     },
     [client]
   )
+
+  // Refresh when the assistant mutates notes data (create/update/delete note or
+  // group) so its changes appear without a manual reload.
+  useModuleDataInvalidation("notes", () => {
+    void load(true)
+  })
 
   useEffect(() => {
     let cancelled = false

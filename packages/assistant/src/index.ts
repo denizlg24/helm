@@ -13,6 +13,8 @@ export {
 } from "./components/tool-call-card"
 export {
   type ChatStatus,
+  type ClientToolCall,
+  type ClientToolDispatcher,
   type PendingApproval,
   type ToolResult,
   type UseAssistantChat,
