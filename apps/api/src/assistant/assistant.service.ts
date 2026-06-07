@@ -290,13 +290,15 @@ export class AssistantService {
       return
     }
 
-    const pending = conversation.pendingApproval
-    if (
-      !pending ||
-      pending.kind !== "client_tool" ||
-      pending.toolUseId !== input.toolUseId ||
-      !pending.resultMessageId
-    ) {
+    // Atomically consume the pending approval to prevent races.
+    const pending = await this.repo.consumePendingApproval(
+      actor.workspaceId,
+      conversationId,
+      "client_tool",
+      input.toolUseId
+    )
+
+    if (!pending || !pending.resultMessageId) {
       emit({
         type: "error",
         code: "NO_PENDING_CLIENT_TOOL",
@@ -318,7 +320,6 @@ export class AssistantService {
         status: "complete",
       })
     }
-    await this.repo.setPendingApproval(actor.workspaceId, conversationId, null)
 
     emit({
       type: "conversation",

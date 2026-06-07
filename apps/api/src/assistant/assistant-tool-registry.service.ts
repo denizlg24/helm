@@ -8,6 +8,9 @@ import {
   getAssistantToolDeclaration,
   toInputJsonSchema,
 } from "@workspace/assistant-tools"
+import type { AuthContext } from "@workspace/types"
+// biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
+import { EntitlementService } from "../entitlements/entitlement.service"
 import {
   ASSISTANT_TOOL_METADATA,
   type AssistantServerToolHandler,
@@ -48,7 +51,10 @@ const toAnthropicTool = (
 export class AssistantToolRegistry implements OnModuleInit {
   private readonly handlers = new Map<string, AssistantServerToolHandler>()
 
-  constructor(private readonly discovery: DiscoveryService) {}
+  constructor(
+    private readonly discovery: DiscoveryService,
+    private readonly entitlementService: EntitlementService
+  ) {}
 
   onModuleInit(): void {
     for (const wrapper of this.discovery.getProviders()) {
@@ -75,16 +81,31 @@ export class AssistantToolRegistry implements OnModuleInit {
   }
 
   // Declarations exposed to the model this turn: every client tool plus every
-  // server tool that has a bound handler. (Per-workspace module gating is a
-  // follow-up; today this mirrors the prior "all tools when enabled" behavior.)
-  availableDeclarations(): AssistantToolDeclaration[] {
-    return assistantToolDeclarations.filter(
+  // server tool that has a bound handler, filtered by module entitlements.
+  async availableDeclarations(
+    actor: AuthContext
+  ): Promise<AssistantToolDeclaration[]> {
+    const baseDeclarations = assistantToolDeclarations.filter(
       (declaration) =>
         declaration.side === "client" || this.handlers.has(declaration.name)
     )
+
+    const filtered: AssistantToolDeclaration[] = []
+    for (const declaration of baseDeclarations) {
+      // Check if the actor's workspace has the module enabled
+      const hasModule = await this.entitlementService.hasFeature(
+        actor.workspaceId,
+        declaration.moduleId
+      )
+      if (hasModule) {
+        filtered.push(declaration)
+      }
+    }
+    return filtered
   }
 
-  toolDefinitions(): Anthropic.Tool[] {
-    return this.availableDeclarations().map(toAnthropicTool)
+  async toolDefinitions(actor: AuthContext): Promise<Anthropic.Tool[]> {
+    const declarations = await this.availableDeclarations(actor)
+    return declarations.map(toAnthropicTool)
   }
 }

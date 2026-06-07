@@ -49,13 +49,14 @@ export const parseAssistantCommand = (
   const trimmed = input.trim()
   if (!trimmed.startsWith("/")) return null
 
-  const firstSpace = trimmed.indexOf(" ")
+  const firstWhitespace = trimmed.search(/\s/)
   const token = (
-    firstSpace === -1 ? trimmed.slice(1) : trimmed.slice(1, firstSpace)
+    firstWhitespace === -1 ? trimmed.slice(1) : trimmed.slice(1, firstWhitespace)
   ).toLowerCase()
   const command = byName.get(token)
   if (!command) return null
 
-  const args = firstSpace === -1 ? "" : trimmed.slice(firstSpace + 1).trim()
+  const args =
+    firstWhitespace === -1 ? "" : trimmed.slice(firstWhitespace + 1).trim()
   return { command, args }
 }

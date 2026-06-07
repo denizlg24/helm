@@ -107,8 +107,10 @@ export function NoteEditor({
     payload: { title: note.title, content },
   })
   useRegisterClientTool("notes_rewrite_open", (input) => {
-    const next = typeof input.content === "string" ? input.content : ""
-    setEditorContent(next)
+    if (typeof input.content !== "string") {
+      return { result: "Invalid payload: content must be a string", isError: true }
+    }
+    setEditorContent(input.content)
     setTogglePreview(false)
     return { result: "Replaced the open note's content in the editor." }
   })

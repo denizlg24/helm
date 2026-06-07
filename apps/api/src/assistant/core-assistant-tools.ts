@@ -28,6 +28,9 @@ const factSchema = new Schema(
   { _id: false, collection: "assistant_facts" }
 )
 
+// Enforce unique constraint on workspaceId + key to prevent duplicate facts
+factSchema.index({ workspaceId: 1, key: 1 }, { unique: true })
+
 const factsModel = (mongo: MongoService): Model<FactDoc> => {
   const connection = mongo.getConnection()
   try {
@@ -96,7 +99,18 @@ export class CoreAssistantToolProvider implements AssistantToolProvider {
       },
       {
         name: "forget_all_facts",
-        run: async (ctx) => {
+        run: async (ctx, input) => {
+          const parsed = z
+            .object({ confirm: z.boolean().optional() })
+            .safeParse(input)
+          const confirmed = parsed.success ? parsed.data.confirm === true : false
+
+          if (!confirmed) {
+            throw new Error(
+              "Deletion not confirmed. This action requires explicit user confirmation."
+            )
+          }
+
           const result = await factsModel(ctx.mongo)
             .deleteMany({ workspaceId: ctx.actor.workspaceId })
             .exec()

@@ -50,14 +50,25 @@ export function AssistantDock() {
     client: apiClient,
     dispatchClientTool,
     onDataMutation: invalidate,
-    getSurfaceContext: () =>
-      readSurface() ?? { module: moduleFromPath(pathname), route: pathname },
+    getSurfaceContext: () => {
+      const surface = readSurface()
+      // Only reuse stored surface if it matches the current route
+      if (surface && surface.route === pathname) {
+        return surface
+      }
+      return { module: moduleFromPath(pathname), route: pathname }
+    },
   })
 
   // Global navigation tool, executed against the Next router.
   useRegisterClientTool("app_navigate", (input) => {
     const route = typeof input.route === "string" ? input.route : ""
-    if (!route.startsWith("/")) {
+    // Only allow same-origin paths: must start with "/" but not "//" and no backslashes
+    if (
+      !route.startsWith("/") ||
+      route.startsWith("//") ||
+      route.includes("\\")
+    ) {
       return { result: `Refused invalid route "${route}".`, isError: true }
     }
     router.push(route)

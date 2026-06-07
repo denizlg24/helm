@@ -90,7 +90,7 @@ Implemented (2026-06-07): all build-order steps below are in place and typecheck
 
 ### Client-tool risk gate
 
-- **No gate.** Client tools execute with true zero friction, including content-overwriting tools like `notes_rewrite_open`. There is no client-side confirm/diff step this pass. The user's only safety net for rewrites is re-prompting or closing without saving until the undo layer lands.
+- **No gate (with mandatory exceptions).** Client tools execute with true zero friction, including content-overwriting tools like `notes_rewrite_open`. There is no client-side confirm/diff step this pass. The user's only safety net for rewrites is re-prompting or closing without saving until the undo layer lands. **However, high-risk actions always require explicit user confirmation regardless of whether they are client-side or server-side.** High-risk actions include: delete operations, sending email, rebooting or restarting resources or services, rotating tokens, and publishing public content.
 - Only the server `approval` risk remains, for genuinely destructive/outward-facing server tools.
 
 ## Notes tool suite (2026-06-07)

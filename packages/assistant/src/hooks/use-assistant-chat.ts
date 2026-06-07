@@ -477,6 +477,13 @@ export function useAssistantChat(
       // Maps tool_use ids to names so a tool_result can refresh the owning
       // module's data when the tool mutates it. Spans resumes within this turn.
       const toolNames = new Map<string, string>()
+
+      // Seed toolNames from pending approval if present, so resumed approvals
+      // can trigger data invalidation correctly.
+      if (state.pendingApproval) {
+        toolNames.set(state.pendingApproval.toolUseId, state.pendingApproval.name)
+      }
+
       const fireIfMutating = (toolUseId: string, isError: boolean) => {
         if (isError) return
         const name = toolNames.get(toolUseId)

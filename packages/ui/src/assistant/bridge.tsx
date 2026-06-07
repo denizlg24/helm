@@ -188,7 +188,14 @@ export function DataInvalidationProvider({
       },
       invalidate: (moduleId) => {
         for (const listener of listeners.current.get(moduleId) ?? []) {
-          listener()
+          try {
+            listener()
+          } catch (error) {
+            console.error(
+              `Error in data invalidation listener for module ${moduleId}:`,
+              error
+            )
+          }
         }
       },
     }),

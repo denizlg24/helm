@@ -257,6 +257,32 @@ export class AssistantRepository {
       .exec()
   }
 
+  // Atomically consume a pending client tool approval. Returns the consumed
+  // pending approval if it matched the expected kind/toolUseId, or null if
+  // there was no match (already consumed or different tool).
+  async consumePendingApproval(
+    workspaceId: string,
+    conversationId: string,
+    expectedKind: "client_tool",
+    expectedToolUseId: string
+  ): Promise<AssistantPendingApproval | null> {
+    const result = await this.conversations()
+      .findOneAndUpdate(
+        {
+          _id: conversationId,
+          workspaceId,
+          "pendingApproval.kind": expectedKind,
+          "pendingApproval.toolUseId": expectedToolUseId,
+        },
+        { $set: { pendingApproval: null, updatedAt: new Date() } },
+        { returnDocument: "before" }
+      )
+      .lean()
+      .exec()
+
+    return result?.pendingApproval ?? null
+  }
+
   async setContext(
     workspaceId: string,
     conversationId: string,

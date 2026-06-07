@@ -124,6 +124,7 @@ export class AssistantController {
 
   @Post("conversations/:id/tool-result")
   @RequireScopes("assistant:write")
+  @AuditSensitive("assistant.tool.resume")
   @RateLimit({ max: 240, windowMs: 10 * 60 * 1000 })
   async toolResult(
     @CurrentAuthContext() actor: AuthContext,

@@ -212,7 +212,8 @@ export class AssistantStreamService {
 
     const tools: Anthropic.ToolUnion[] = []
     if (conversation.toolsEnabled) {
-      for (const tool of this.tools.toolDefinitions()) tools.push(tool)
+      for (const tool of await this.tools.toolDefinitions(actor))
+        tools.push(tool)
     }
     if (conversation.webSearchEnabled) tools.push(WEB_SEARCH_TOOL)
 
@@ -365,7 +366,7 @@ export class AssistantStreamService {
           conversation._id,
           {
             kind: "client_tool",
-            messageId: ownerId ?? "",
+            ...(ownerId ? { messageId: ownerId } : {}),
             toolUseId: use.id,
             name: use.name,
             input: use.input,
