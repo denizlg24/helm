@@ -52,7 +52,7 @@ The reference app exposed AI features as discrete buttons, each bound to a fixed
 ### Client-tool round-trip
 
 - New stream event `client_tool_call` (mirrors the existing `tool_approval_required` suspension).
-- New resume endpoint `POST /api/assistant/.../tool-result` (mirrors `/approve`): accepts `{ conversationId, toolUseId, result, isError? }`, persists the `tool_result` block, and resumes `runConversation`.
+- New resume endpoint `POST /conversations/:id/tool-result` (mirrors `/approve`): the conversation ID is supplied only by the `:id` path parameter; the body accepts `{ toolUseId, result, isError? }`. The route persists the `tool_result` block and resumes `runConversation`.
 - The web client owns a **client-tool dispatcher** keyed by tool name; module surfaces register handlers (e.g. notes registers `notes_rewrite_open`).
 
 ### Surface context

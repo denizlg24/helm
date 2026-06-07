@@ -464,6 +464,8 @@ export function useAssistantChat(
 
   const currentConversationId = useRef<string | null>(null)
   currentConversationId.current = state.conversationId
+  const pendingApprovalRef = useRef<ChatState["pendingApproval"]>(null)
+  pendingApprovalRef.current = state.pendingApproval
 
   // Drives a stream to completion. When the server suspends on a client tool,
   // executes it locally, posts the result, and keeps consuming the resumed
@@ -480,8 +482,9 @@ export function useAssistantChat(
 
       // Seed toolNames from pending approval if present, so resumed approvals
       // can trigger data invalidation correctly.
-      if (state.pendingApproval) {
-        toolNames.set(state.pendingApproval.toolUseId, state.pendingApproval.name)
+      const pendingApproval = pendingApprovalRef.current
+      if (pendingApproval) {
+        toolNames.set(pendingApproval.toolUseId, pendingApproval.name)
       }
 
       const fireIfMutating = (toolUseId: string, isError: boolean) => {
