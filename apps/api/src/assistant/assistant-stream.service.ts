@@ -425,7 +425,7 @@ export class AssistantStreamService {
           conversation._id,
           {
             kind: "approval",
-            messageId: ownerId ?? "",
+            ...(ownerId ? { messageId: ownerId } : {}),
             toolUseId: use.id,
             name: use.name,
             input: use.input,

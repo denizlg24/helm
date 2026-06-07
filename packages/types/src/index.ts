@@ -668,11 +668,12 @@ export const AssistantMessageSchema = z.object({
 // tool the model requested. The turn is suspended until the decision arrives.
 // A suspended turn awaiting external resolution. `approval` waits for the user
 // to approve/deny a server tool; `client_tool` waits for the client to execute
-// a tool and post its result. `resultMessageId` is the user message the
+// a tool and post its result. `messageId` identifies the assistant message that
+// owns the tool use when available. `resultMessageId` is the user message the
 // resolved tool_result block is pushed into (client_tool only).
 export const AssistantPendingApprovalSchema = z.object({
   kind: z.enum(["approval", "client_tool"]).default("approval"),
-  messageId: z.string().min(1),
+  messageId: z.string().min(1).optional(),
   toolUseId: z.string().min(1),
   name: z.string().min(1),
   input: z.record(z.string(), z.unknown()),
