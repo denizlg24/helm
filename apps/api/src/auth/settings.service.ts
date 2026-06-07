@@ -65,6 +65,7 @@ export class SettingsService {
     const merged = UserSettingsSchema.parse({
       appearance: { ...current.appearance, ...input.appearance },
       shortcuts: { ...current.shortcuts, ...input.shortcuts },
+      assistant: { ...current.assistant, ...input.assistant },
       modules: mergedModules,
     })
 

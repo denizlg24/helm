@@ -1,17 +1,35 @@
 "use client"
 
 import type { HelmApiClient } from "@workspace/api-client"
+import {
+  assistantCommandDeclarations,
+  parseAssistantCommand,
+} from "@workspace/assistant-commands"
+import { getAssistantToolDeclaration } from "@workspace/assistant-tools"
 import type {
   AssistantConversationDetail,
   AssistantMessage,
   AssistantModelId,
   AssistantStreamEvent,
+  AssistantSurfaceContext,
   FileRef,
 } from "@workspace/types"
 import { DEFAULT_ASSISTANT_MODEL_ID } from "@workspace/types"
 import { useCallback, useReducer, useRef } from "react"
 
 export type ChatStatus = "idle" | "streaming" | "awaiting_approval" | "error"
+
+// A tool the model wants the client to execute against live UI state. The
+// dispatcher returns the serialized result, which is posted back to resume.
+export interface ClientToolCall {
+  toolUseId: string
+  name: string
+  input: Record<string, unknown>
+}
+
+export type ClientToolDispatcher = (
+  call: ClientToolCall
+) => Promise<{ result: string; isError?: boolean }>
 
 export interface ToolResult {
   content: string
@@ -56,6 +74,7 @@ type Action =
   | { type: "reset" }
   | { type: "load"; payload: AssistantConversationDetail }
   | { type: "appendUserMessage"; message: AssistantMessage }
+  | { type: "localAssistantMessage"; text: string }
   | { type: "streamStart" }
   | { type: "event"; event: AssistantStreamEvent }
   | { type: "streamError"; message: string }
@@ -151,6 +170,19 @@ const reducer = (state: ChatState, action: Action): ChatState => {
         status: "streaming",
         error: null,
       }
+    case "localAssistantMessage":
+      return {
+        ...state,
+        messages: [
+          ...state.messages,
+          {
+            ...placeholderMessage(`local-${Date.now()}`, "assistant", [
+              { type: "text", text: action.text },
+            ]),
+            status: "complete",
+          },
+        ],
+      }
     case "streamStart":
       return { ...state, status: "streaming", error: null }
     case "streamError": {
@@ -214,6 +246,33 @@ const reduceEvent = (
         }),
       }
     case "tool_use":
+      return {
+        ...state,
+        messages: updateLastAssistant(state.messages, (message) => {
+          if (
+            message.blocks.some(
+              (b) => b.type === "tool_use" && b.id === event.toolUseId
+            )
+          ) {
+            return message
+          }
+          return {
+            ...message,
+            blocks: [
+              ...message.blocks,
+              {
+                type: "tool_use",
+                id: event.toolUseId,
+                name: event.name,
+                input: event.input,
+              },
+            ],
+          }
+        }),
+      }
+    case "client_tool_call":
+      // Render the call like any tool use; the hook executes it locally and
+      // resumes. No pendingApproval — client tools carry no confirmation gate.
       return {
         ...state,
         messages: updateLastAssistant(state.messages, (message) => {
@@ -346,6 +405,15 @@ const reduceEvent = (
 export interface UseAssistantChatOptions {
   client: HelmApiClient
   onConversationChange?: (conversationId: string, title: string) => void
+  // Returns the user's current surface, attached to each turn so the assistant
+  // can resolve "this note" / "here". Read live at send time.
+  getSurfaceContext?: () => AssistantSurfaceContext | undefined
+  // Executes a client tool against live UI state (edit open doc, navigate).
+  // Required for client-side tools to resolve; absent → such calls error out.
+  dispatchClientTool?: ClientToolDispatcher
+  // Called with a module id after a server tool that mutates that module's data
+  // succeeds, so the surface can refresh (e.g. assistant creates a note/group).
+  onDataMutation?: (moduleId: string) => void
 }
 
 export interface UseAssistantChat {
@@ -382,42 +450,160 @@ export function useAssistantChat(
   const modelRef = useRef<AssistantModelId>(DEFAULT_ASSISTANT_MODEL_ID)
   const webSearchRef = useRef(false)
   const toolsRef = useRef(true)
+  // Live refs so async iteration reads the latest values without re-creating
+  // callbacks on every render.
+  const getSurfaceContextRef = useRef(options.getSurfaceContext)
+  getSurfaceContextRef.current = options.getSurfaceContext
+  const dispatchClientToolRef = useRef(options.dispatchClientTool)
+  dispatchClientToolRef.current = options.dispatchClientTool
+  const onDataMutationRef = useRef(options.onDataMutation)
+  onDataMutationRef.current = options.onDataMutation
   // Mirror selection in state purely for re-render; refs hold the source used
   // inside async iteration to avoid stale closures.
   const [, force] = useReducer((n: number) => n + 1, 0)
 
-  const consume = useCallback(
-    async (stream: AsyncGenerator<AssistantStreamEvent, void, unknown>) => {
-      try {
-        for await (const event of stream) {
-          dispatch({ type: "event", event })
-          if (event.type === "conversation") {
-            onConversationChange?.(event.conversationId, event.title)
-          }
-        }
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") {
-          return
-        }
-        dispatch({
-          type: "streamError",
-          message:
-            error instanceof Error
-              ? error.message
-              : "The assistant stream failed.",
-        })
-      }
-    },
-    [onConversationChange]
-  )
-
   const currentConversationId = useRef<string | null>(null)
   currentConversationId.current = state.conversationId
+  const pendingApprovalRef = useRef<ChatState["pendingApproval"]>(null)
+  pendingApprovalRef.current = state.pendingApproval
+
+  // Drives a stream to completion. When the server suspends on a client tool,
+  // executes it locally, posts the result, and keeps consuming the resumed
+  // stream — looping until the turn finishes with no further client call.
+  const consume = useCallback(
+    async (
+      initialStream: AsyncGenerator<AssistantStreamEvent, void, unknown>
+    ) => {
+      let stream = initialStream
+      let convId = currentConversationId.current
+      // Maps tool_use ids to names so a tool_result can refresh the owning
+      // module's data when the tool mutates it. Spans resumes within this turn.
+      const toolNames = new Map<string, string>()
+
+      // Seed toolNames from pending approval if present, so resumed approvals
+      // can trigger data invalidation correctly.
+      const pendingApproval = pendingApprovalRef.current
+      if (pendingApproval) {
+        toolNames.set(pendingApproval.toolUseId, pendingApproval.name)
+      }
+
+      const fireIfMutating = (toolUseId: string, isError: boolean) => {
+        if (isError) return
+        const name = toolNames.get(toolUseId)
+        if (!name) return
+        const declaration = getAssistantToolDeclaration(name)
+        if (declaration?.mutates) {
+          onDataMutationRef.current?.(declaration.moduleId)
+        }
+      }
+      while (true) {
+        let clientCall: ClientToolCall | null = null
+        try {
+          for await (const event of stream) {
+            dispatch({ type: "event", event })
+            if (event.type === "conversation") {
+              convId = event.conversationId
+              onConversationChange?.(event.conversationId, event.title)
+            } else if (event.type === "client_tool_call") {
+              clientCall = {
+                toolUseId: event.toolUseId,
+                name: event.name,
+                input: event.input,
+              }
+              toolNames.set(event.toolUseId, event.name)
+            } else if (
+              event.type === "tool_use" ||
+              event.type === "tool_approval_required"
+            ) {
+              toolNames.set(event.toolUseId, event.name)
+            } else if (event.type === "tool_result") {
+              fireIfMutating(event.toolUseId, event.isError)
+            }
+          }
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") {
+            return
+          }
+          dispatch({
+            type: "streamError",
+            message:
+              error instanceof Error
+                ? error.message
+                : "The assistant stream failed.",
+          })
+          return
+        }
+
+        if (!clientCall || !convId) return
+        const dispatcher = dispatchClientToolRef.current
+        const outcome = dispatcher
+          ? await dispatcher(clientCall).catch((error: unknown) => ({
+              result:
+                error instanceof Error
+                  ? error.message
+                  : "Client tool execution failed.",
+              isError: true,
+            }))
+          : {
+              result: `No client handler is registered for tool "${clientCall.name}".`,
+              isError: true,
+            }
+
+        // Surface the locally-produced result under the tool call, then resume.
+        dispatch({
+          type: "event",
+          event: {
+            type: "tool_result",
+            toolUseId: clientCall.toolUseId,
+            content: outcome.result,
+            isError: outcome.isError ?? false,
+          },
+        })
+
+        const controller = new AbortController()
+        abortRef.current = controller
+        dispatch({ type: "streamStart" })
+        stream = client.assistant.submitToolResult(
+          convId,
+          {
+            toolUseId: clientCall.toolUseId,
+            result: outcome.result,
+            isError: outcome.isError ?? false,
+          },
+          controller.signal
+        )
+      }
+    },
+    [client, onConversationChange]
+  )
 
   const send = useCallback(
     async (content: string, attachments: FileRef[] = []) => {
       const trimmed = content.trim()
       if (trimmed.length === 0 && attachments.length === 0) return
+
+      // Slash commands are handled locally and never streamed to the model.
+      const command =
+        attachments.length === 0 ? parseAssistantCommand(trimmed) : null
+      if (command) {
+        if (command.command.name === "new") {
+          abortRef.current?.abort()
+          abortRef.current = null
+          currentConversationId.current = null
+          dispatch({ type: "reset" })
+        } else if (command.command.name === "help") {
+          const lines = assistantCommandDeclarations.map(
+            (c) =>
+              `- \`/${c.name}\`${c.argsHint ? ` ${c.argsHint}` : ""} — ${c.description}`
+          )
+          dispatch({
+            type: "localAssistantMessage",
+            text: `Available commands:\n${lines.join("\n")}`,
+          })
+        }
+        return
+      }
+
       abortRef.current?.abort()
       const controller = new AbortController()
       abortRef.current = controller
@@ -441,6 +627,7 @@ export function useAssistantChat(
         message: placeholderMessage(`local-${Date.now()}`, "user", blocks),
       })
 
+      const surface = getSurfaceContextRef.current?.()
       const conversationId = currentConversationId.current
       const stream = client.assistant.streamChat(
         {
@@ -452,6 +639,7 @@ export function useAssistantChat(
           model: modelRef.current,
           webSearch: webSearchRef.current,
           tools: toolsRef.current,
+          ...(surface ? { context: surface } : {}),
         },
         controller.signal
       )

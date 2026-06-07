@@ -25,6 +25,7 @@
         "@nestjs/core": "^11.1.23",
         "@nestjs/platform-fastify": "^11.1.23",
         "@polar-sh/sdk": "^0.47.1",
+        "@workspace/assistant-tools": "workspace:*",
         "@workspace/auth": "workspace:*",
         "@workspace/db": "workspace:*",
         "@workspace/module-registry": "workspace:*",
@@ -175,6 +176,8 @@
       "version": "0.0.0",
       "dependencies": {
         "@workspace/api-client": "workspace:*",
+        "@workspace/assistant-commands": "workspace:*",
+        "@workspace/assistant-tools": "workspace:*",
         "@workspace/types": "workspace:*",
         "@workspace/ui": "workspace:*",
         "lucide-react": "^1.16.0",
@@ -186,6 +189,25 @@
         "@types/react-dom": "^19.2.3",
         "@workspace/typescript-config": "workspace:*",
         "typescript": "^5.9.3",
+      },
+    },
+    "packages/assistant-commands": {
+      "name": "@workspace/assistant-commands",
+      "version": "0.0.1",
+      "devDependencies": {
+        "@workspace/typescript-config": "workspace:*",
+        "typescript": "^6.0.3",
+      },
+    },
+    "packages/assistant-tools": {
+      "name": "@workspace/assistant-tools",
+      "version": "0.0.1",
+      "dependencies": {
+        "zod": "^4.4.3",
+      },
+      "devDependencies": {
+        "@workspace/typescript-config": "workspace:*",
+        "typescript": "^6.0.3",
       },
     },
     "packages/auth": {
@@ -1095,6 +1117,10 @@
     "@workspace/api-client": ["@workspace/api-client@workspace:packages/api-client"],
 
     "@workspace/assistant": ["@workspace/assistant@workspace:packages/assistant"],
+
+    "@workspace/assistant-commands": ["@workspace/assistant-commands@workspace:packages/assistant-commands"],
+
+    "@workspace/assistant-tools": ["@workspace/assistant-tools@workspace:packages/assistant-tools"],
 
     "@workspace/auth": ["@workspace/auth@workspace:packages/auth"],
 

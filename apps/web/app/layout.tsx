@@ -1,8 +1,14 @@
 import { Geist, Geist_Mono } from "next/font/google"
 
 import "@workspace/ui/globals.css"
+import {
+  ClientToolsProvider,
+  DataInvalidationProvider,
+  SurfaceContextProvider,
+} from "@workspace/ui/assistant/bridge"
 import { Toaster } from "@workspace/ui/components/sonner"
 import { cn } from "@workspace/ui/lib/utils"
+import { AssistantDock } from "@/components/assistant-dock"
 import { CommandPalette } from "@/components/command-palette"
 import { SettingsProvider } from "@/components/settings/settings-provider"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -33,9 +39,16 @@ export default function RootLayout({
       <body>
         <ThemeProvider>
           <SettingsProvider>
-            {children}
-            <CommandPalette />
-            <Toaster position="bottom-right" />
+            <SurfaceContextProvider>
+              <ClientToolsProvider>
+                <DataInvalidationProvider>
+                  {children}
+                  <AssistantDock />
+                  <CommandPalette />
+                  <Toaster position="bottom-right" />
+                </DataInvalidationProvider>
+              </ClientToolsProvider>
+            </SurfaceContextProvider>
           </SettingsProvider>
         </ThemeProvider>
       </body>

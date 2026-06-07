@@ -8,6 +8,7 @@ import type {
   AssistantMessageStatus,
   AssistantModelId,
   AssistantPendingApproval,
+  AssistantSurfaceContext,
   AssistantTokenUsage,
   AuthContext,
 } from "@workspace/types"
@@ -25,6 +26,9 @@ interface ConversationDoc {
   webSearchEnabled: boolean
   toolsEnabled: boolean
   pendingApproval: AssistantPendingApproval | null
+  // The surface the user was on for the latest turn. Reused to ground resumes
+  // (approval / client tool-result) since those carry no fresh context.
+  lastContext: AssistantSurfaceContext | null
   lastMessageAt: Date
   createdAt: Date
   updatedAt: Date
@@ -54,6 +58,7 @@ const conversationSchema = new Schema(
     webSearchEnabled: { type: Boolean, required: true, default: false },
     toolsEnabled: { type: Boolean, required: true, default: true },
     pendingApproval: { type: Schema.Types.Mixed, default: null },
+    lastContext: { type: Schema.Types.Mixed, default: null },
     lastMessageAt: { type: Date, required: true },
     createdAt: { type: Date, required: true },
     updatedAt: { type: Date, required: true },
@@ -134,6 +139,7 @@ export class AssistantRepository {
       webSearchEnabled: input.webSearchEnabled,
       toolsEnabled: input.toolsEnabled,
       pendingApproval: null,
+      lastContext: null,
       lastMessageAt: now,
       createdAt: now,
       updatedAt: now,
@@ -247,6 +253,45 @@ export class AssistantRepository {
       .updateOne(
         { _id: conversationId, workspaceId },
         { $set: { pendingApproval: pending, updatedAt: new Date() } }
+      )
+      .exec()
+  }
+
+  // Atomically consume a pending client tool approval. Returns the consumed
+  // pending approval if it matched the expected kind/toolUseId, or null if
+  // there was no match (already consumed or different tool).
+  async consumePendingApproval(
+    workspaceId: string,
+    conversationId: string,
+    expectedKind: "client_tool",
+    expectedToolUseId: string
+  ): Promise<AssistantPendingApproval | null> {
+    const result = await this.conversations()
+      .findOneAndUpdate(
+        {
+          _id: conversationId,
+          workspaceId,
+          "pendingApproval.kind": expectedKind,
+          "pendingApproval.toolUseId": expectedToolUseId,
+        },
+        { $set: { pendingApproval: null, updatedAt: new Date() } },
+        { returnDocument: "before" }
+      )
+      .lean()
+      .exec()
+
+    return result?.pendingApproval ?? null
+  }
+
+  async setContext(
+    workspaceId: string,
+    conversationId: string,
+    context: AssistantSurfaceContext | null
+  ): Promise<void> {
+    await this.conversations()
+      .updateOne(
+        { _id: conversationId, workspaceId },
+        { $set: { lastContext: context, updatedAt: new Date() } }
       )
       .exec()
   }
