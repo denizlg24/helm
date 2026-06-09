@@ -53,6 +53,7 @@ import {
 import { toast } from "../components/sonner"
 import { Spinner } from "../components/spinner"
 import { Tabs, TabsList, TabsTrigger } from "../components/tabs"
+import { useBackgroundActivities } from "../lib/background-activity"
 import { FolderExplorer } from "./components/folder-explorer"
 import { GroupDetail } from "./components/group-detail"
 import { GroupTreeCombobox } from "./components/group-tree-combobox"
@@ -239,6 +240,7 @@ export function NotesDashboard({
   headerEndSlot,
   headerTitle = "Notes",
 }: NotesDashboardProps) {
+  const backgroundActivities = useBackgroundActivities()
   const [ready, setReady] = useState(false)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -632,7 +634,7 @@ export function NotesDashboard({
       user={user}
       onSettings={onSettings}
       onLogout={() => void onSignOut()}
-      backgroundItems={[]}
+      backgroundItems={backgroundActivities}
       notifications={[]}
       endSlot={headerEndSlot}
     />

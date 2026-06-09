@@ -118,6 +118,64 @@ fn select_files() -> Result<Vec<SelectedFile>, String> {
     Ok(result)
 }
 
+const MAX_POMODORO_STATE_BYTES: usize = 16 * 1024; // 16 KB
+
+fn pomodoro_state_path(app: &tauri::AppHandle, scope: &str) -> Result<std::path::PathBuf, String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    // Sanitize scope to prevent path traversal: only allow alphanumerics, hyphens, and underscores
+    let sanitized_scope: String = scope
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+        .collect();
+    if sanitized_scope.is_empty() {
+        return Err("Invalid scope: must contain at least one alphanumeric, hyphen, or underscore character".to_string());
+    }
+    let filename = format!("pomodoro-state-{}.json", sanitized_scope);
+    Ok(dir.join(filename))
+}
+
+#[tauri::command]
+fn pomodoro_load_state(app: tauri::AppHandle, scope: String) -> Result<Option<String>, String> {
+    let path = pomodoro_state_path(&app, &scope)?;
+    match fs::metadata(&path) {
+        Ok(metadata) => {
+            let size = metadata.len();
+            if size > MAX_POMODORO_STATE_BYTES as u64 {
+                return Err(format!(
+                    "Pomodoro state file exceeds maximum size of {} KB",
+                    MAX_POMODORO_STATE_BYTES / 1024
+                ));
+            }
+            match fs::read_to_string(&path) {
+                Ok(snapshot) => Ok(Some(snapshot)),
+                Err(error) => Err(error.to_string()),
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+#[tauri::command]
+fn pomodoro_save_state(app: tauri::AppHandle, scope: String, snapshot: String) -> Result<(), String> {
+    if snapshot.len() > MAX_POMODORO_STATE_BYTES {
+        return Err("Pomodoro state snapshot is too large".to_string());
+    }
+    let path = pomodoro_state_path(&app, &scope)?;
+    fs::write(&path, snapshot).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn pomodoro_clear_state(app: tauri::AppHandle, scope: String) -> Result<(), String> {
+    let path = pomodoro_state_path(&app, &scope)?;
+    match fs::remove_file(&path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
 #[tauri::command]
 fn toggle_devtools(_app: tauri::AppHandle) {
     #[cfg(debug_assertions)]
@@ -142,6 +200,9 @@ pub fn run() {
             keychain_get,
             keychain_delete,
             select_files,
+            pomodoro_load_state,
+            pomodoro_save_state,
+            pomodoro_clear_state,
             toggle_devtools
         ])
         .setup(|app| {

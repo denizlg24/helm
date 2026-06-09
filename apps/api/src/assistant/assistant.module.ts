@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common"
 import { DiscoveryModule } from "@nestjs/core"
+import { EntitlementModule } from "../entitlements/entitlement.module"
 import { LlmModule } from "../llm/llm.module"
 import { StorageModule } from "../storage/storage.module"
 import { AssistantController } from "./assistant.controller"
@@ -10,7 +11,7 @@ import { AssistantToolRegistry } from "./assistant-tool-registry.service"
 import { CoreAssistantToolProvider } from "./core-assistant-tools"
 
 @Module({
-  imports: [DiscoveryModule, LlmModule, StorageModule],
+  imports: [DiscoveryModule, EntitlementModule, LlmModule, StorageModule],
   controllers: [AssistantController],
   providers: [
     AssistantRepository,

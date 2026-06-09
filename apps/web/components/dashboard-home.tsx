@@ -19,6 +19,7 @@ import {
 import { toast } from "@workspace/ui/components/sonner"
 import { Spinner } from "@workspace/ui/components/spinner"
 import { useIsMobile } from "@workspace/ui/hooks/use-mobile"
+import { useBackgroundActivities } from "@workspace/ui/lib/background-activity"
 import { cn } from "@workspace/ui/lib/utils"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
@@ -35,6 +36,7 @@ export interface DashboardHomeProps {
 export function DashboardHome({ user, onSignOut }: DashboardHomeProps) {
   const router = useRouter()
   const isMobile = useIsMobile()
+  const backgroundActivities = useBackgroundActivities()
   const [ready, setReady] = useState(false)
   const [conversations, setConversations] = useState<
     AssistantConversationSummary[]
@@ -170,7 +172,7 @@ export function DashboardHome({ user, onSignOut }: DashboardHomeProps) {
           user={user}
           onSettings={() => router.push("/settings")}
           onLogout={() => void onSignOut()}
-          backgroundItems={[]}
+          backgroundItems={backgroundActivities}
           notifications={[]}
         />
 

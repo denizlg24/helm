@@ -11,6 +11,7 @@ import { ModuleConfigModule } from "./module-configs/module-config.module"
 import { MongoModule } from "./mongo/mongo.module"
 import { NotesModule } from "./notes/notes.module"
 import { OnboardingModule } from "./onboarding/onboarding.module"
+import { PomodoroModule } from "./pomodoro/pomodoro.module"
 import { RedisModule } from "./redis/redis.module"
 import { StorageModule } from "./storage/storage.module"
 import { WorkspaceModule } from "./workspaces/workspace.module"
@@ -30,6 +31,7 @@ import { WorkspaceModule } from "./workspaces/workspace.module"
     OnboardingModule,
     AssistantModule,
     NotesModule,
+    PomodoroModule,
     StorageModule,
     DesktopInstallerModule,
   ],

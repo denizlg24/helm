@@ -50,6 +50,7 @@ packages/typescript-config Shared TS configs (base, nextjs, react-library)
 - Business logic lives in **service classes** only. Controllers, assistant tools, and job processors all call services — never duplicate logic.
 - Every authenticated request resolves: JWT → userId → workspace membership → token scopes → module enabled → entitlement → business logic → audit (if sensitive).
 - All plan/entitlement checks go through the entitlement service. Never inline `if plan === 'pro'` in feature code.
+- Nest providers are module-scoped. Every module that injects a provider must directly import the module that exports it. Never rely on that provider's module being imported by `AppModule`, a sibling module, or a transitive dependency.
 - Zod validation on every input boundary.
 
 ### Database
