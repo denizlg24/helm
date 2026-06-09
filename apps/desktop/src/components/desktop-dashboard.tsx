@@ -78,7 +78,7 @@ import { apiClient, setApiToken, setApiWorkspaceId } from "../lib/api"
 import { applyAppearanceMode, cacheAppearanceMode } from "../lib/appearance"
 import { featureGatedImport } from "../lib/feature-gated-import"
 import { isFeatureEnabled } from "../lib/features"
-import { tauriPomodoroTimerStore } from "../lib/pomodoro-store"
+import { createTauriPomodoroTimerStore } from "../lib/pomodoro-store"
 import { WindowControls } from "./window-controls"
 
 const DEFAULT_SETTINGS = UserSettingsSchema.parse({})
@@ -243,6 +243,10 @@ function DesktopDashboardInner({
   const [loadingList, setLoadingList] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isMac] = useState(() => platform() === "macos")
+  const [authScope, setAuthScope] = useState<{
+    workspaceId: string
+    userId: string
+  } | null>(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -272,6 +276,10 @@ function DesktopDashboardInner({
     setApiToken(token)
     const response = await apiClient.user.current()
     setApiWorkspaceId(response.authContext.workspaceId)
+    setAuthScope({
+      workspaceId: response.authContext.workspaceId,
+      userId: response.authContext.userId,
+    })
     setDisplayUser({
       email: response.user.email ?? response.authContext.userEmail,
       name: response.user.name ?? response.authContext.userName,
@@ -283,6 +291,7 @@ function DesktopDashboardInner({
     setApiToken(token)
     setReady(false)
     setApiWorkspaceId(null)
+    setAuthScope(null)
     setConversations([])
     setDisplayUser(user)
     setEnabledModules(new Set())
@@ -292,6 +301,10 @@ function DesktopDashboardInner({
       .then((response) => {
         if (cancelled) return
         setApiWorkspaceId(response.authContext.workspaceId)
+        setAuthScope({
+          workspaceId: response.authContext.workspaceId,
+          userId: response.authContext.userId,
+        })
         setDisplayUser({
           email: response.user.email ?? response.authContext.userEmail,
           name: response.user.name ?? response.authContext.userName,
@@ -576,11 +589,19 @@ function DesktopDashboardInner({
     </div>
   )
 
+  const pomodoroTimerStore = useMemo(
+    () =>
+      authScope
+        ? createTauriPomodoroTimerStore(authScope.workspaceId, authScope.userId)
+        : undefined,
+    [authScope]
+  )
+
   return (
     <PomodoroProvider
       client={apiClient}
-      enabled={ready && pomodoroAvailable}
-      timerStore={tauriPomodoroTimerStore}
+      enabled={ready && pomodoroAvailable && pomodoroTimerStore !== undefined}
+      timerStore={pomodoroTimerStore}
     >
       {surfaceContent}
     </PomodoroProvider>
