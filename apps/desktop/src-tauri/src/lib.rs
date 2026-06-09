@@ -123,7 +123,15 @@ const MAX_POMODORO_STATE_BYTES: usize = 16 * 1024; // 16 KB
 fn pomodoro_state_path(app: &tauri::AppHandle, scope: &str) -> Result<std::path::PathBuf, String> {
     let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let filename = format!("pomodoro-state-{}.json", scope);
+    // Sanitize scope to prevent path traversal: only allow alphanumerics, hyphens, and underscores
+    let sanitized_scope: String = scope
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+        .collect();
+    if sanitized_scope.is_empty() {
+        return Err("Invalid scope: must contain at least one alphanumeric, hyphen, or underscore character".to_string());
+    }
+    let filename = format!("pomodoro-state-{}.json", sanitized_scope);
     Ok(dir.join(filename))
 }
 
