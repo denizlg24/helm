@@ -118,37 +118,49 @@ fn select_files() -> Result<Vec<SelectedFile>, String> {
     Ok(result)
 }
 
-const POMODORO_STATE_FILE: &str = "pomodoro-state.json";
 const MAX_POMODORO_STATE_BYTES: usize = 16 * 1024; // 16 KB
 
-fn pomodoro_state_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+fn pomodoro_state_path(app: &tauri::AppHandle, scope: &str) -> Result<std::path::PathBuf, String> {
     let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    Ok(dir.join(POMODORO_STATE_FILE))
+    let filename = format!("pomodoro-state-{}.json", scope);
+    Ok(dir.join(filename))
 }
 
 #[tauri::command]
-fn pomodoro_load_state(app: tauri::AppHandle) -> Result<Option<String>, String> {
-    let path = pomodoro_state_path(&app)?;
-    match fs::read_to_string(&path) {
-        Ok(snapshot) => Ok(Some(snapshot)),
+fn pomodoro_load_state(app: tauri::AppHandle, scope: String) -> Result<Option<String>, String> {
+    let path = pomodoro_state_path(&app, &scope)?;
+    match fs::metadata(&path) {
+        Ok(metadata) => {
+            let size = metadata.len();
+            if size > MAX_POMODORO_STATE_BYTES as u64 {
+                return Err(format!(
+                    "Pomodoro state file exceeds maximum size of {} KB",
+                    MAX_POMODORO_STATE_BYTES / 1024
+                ));
+            }
+            match fs::read_to_string(&path) {
+                Ok(snapshot) => Ok(Some(snapshot)),
+                Err(error) => Err(error.to_string()),
+            }
+        }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(error) => Err(error.to_string()),
     }
 }
 
 #[tauri::command]
-fn pomodoro_save_state(app: tauri::AppHandle, snapshot: String) -> Result<(), String> {
+fn pomodoro_save_state(app: tauri::AppHandle, scope: String, snapshot: String) -> Result<(), String> {
     if snapshot.len() > MAX_POMODORO_STATE_BYTES {
         return Err("Pomodoro state snapshot is too large".to_string());
     }
-    let path = pomodoro_state_path(&app)?;
+    let path = pomodoro_state_path(&app, &scope)?;
     fs::write(&path, snapshot).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn pomodoro_clear_state(app: tauri::AppHandle) -> Result<(), String> {
-    let path = pomodoro_state_path(&app)?;
+fn pomodoro_clear_state(app: tauri::AppHandle, scope: String) -> Result<(), String> {
+    let path = pomodoro_state_path(&app, &scope)?;
     match fs::remove_file(&path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),

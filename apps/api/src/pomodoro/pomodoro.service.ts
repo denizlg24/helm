@@ -160,11 +160,13 @@ export class PomodoroService {
   }
 
   async deleteSession(actor: AuthContext, id: string) {
-    await this.repository.findSessionOrThrow(actor, id)
-    await this.repository.sessions.deleteOne({
+    const result = await this.repository.sessions.deleteOne({
       ...this.repository.workspaceFilter(actor),
       id,
     })
+    if (result.deletedCount === 0) {
+      throw new BadRequestException("Pomodoro session not found")
+    }
     await this.audit.write(actor, {
       action: "pomodoro-session.delete",
       resourceType: "pomodoro-session",

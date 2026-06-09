@@ -1,5 +1,10 @@
 import { Injectable } from "@nestjs/common"
 import type { PomodoroSession } from "@workspace/types"
+import {
+  PomodoroSessionsQuerySchema,
+  UpdatePomodoroSessionInputSchema,
+  UpdatePomodoroSettingsInputSchema,
+} from "@workspace/types"
 import { z } from "zod"
 import {
   type AssistantServerToolHandler,
@@ -12,29 +17,16 @@ import { PomodoroService } from "./pomodoro.service"
 const NOTES_SNIPPET_CHARS = 200
 const DEFAULT_LIST_LIMIT = 50
 
-const updateSettingsToolInput = z.object({
-  focusMinutes: z.number().int().min(1).max(180).optional(),
-  shortBreakMinutes: z.number().int().min(1).max(60).optional(),
-  longBreakMinutes: z.number().int().min(1).max(120).optional(),
-  longBreakEvery: z.number().int().min(1).max(12).optional(),
-  autoStartBreaks: z.boolean().optional(),
-  autoStartFocus: z.boolean().optional(),
-  soundEnabled: z.boolean().optional(),
-  notificationsEnabled: z.boolean().optional(),
-  dailyGoalSessions: z.number().int().min(1).max(24).optional(),
+const updateSettingsToolInput = UpdatePomodoroSettingsInputSchema
+
+const listSessionsToolInput = PomodoroSessionsQuerySchema.pick({
+  from: true,
+  to: true,
+  limit: true,
 })
 
-const listSessionsToolInput = z.object({
-  from: z.coerce.date().optional(),
-  to: z.coerce.date().optional(),
-  limit: z.number().int().min(1).max(200).optional(),
-})
-
-const updateSessionToolInput = z.object({
+const updateSessionToolInput = UpdatePomodoroSessionInputSchema.extend({
   id: z.string().min(1),
-  subject: z.string().max(200).nullable().optional(),
-  topics: z.array(z.string().min(1).max(60)).max(20).optional(),
-  notes: z.string().max(20_000).optional(),
 })
 
 const deleteSessionToolInput = z.object({

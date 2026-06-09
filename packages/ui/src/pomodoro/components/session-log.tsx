@@ -80,6 +80,8 @@ export function SessionLog({
     try {
       await onDelete(deleteTarget.id)
       setDeleteTarget(null)
+    } catch (error) {
+      console.error("Failed to delete session:", error)
     } finally {
       setDeleting(false)
     }

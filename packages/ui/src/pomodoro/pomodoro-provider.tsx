@@ -249,6 +249,7 @@ export function PomodoroProvider({
 
   const handleFocusComplete = useCallback(
     (focus: FocusResult) => {
+      if (!enabled) return
       flashScene("arrived", 5000)
       chime()
       announce("Focus complete", "Focus session finished — time for a break.")
@@ -258,11 +259,12 @@ export function PomodoroProvider({
           toast.error(getErrorMessage(error, "Could not save the session"))
         })
     },
-    [announce, chime, flashScene, recordSession]
+    [enabled, announce, chime, flashScene, recordSession]
   )
 
   const handleFocusAbandoned = useCallback(
     (focus: FocusResult) => {
+      if (!enabled) return
       flashScene("sinking", 1600)
       if (focus.completedSeconds < MIN_RECORDED_ABANDON_SECONDS) {
         toast("Session ended", {
@@ -280,13 +282,14 @@ export function PomodoroProvider({
           toast.error(getErrorMessage(error, "Could not save the session"))
         })
     },
-    [flashScene, recordSession]
+    [enabled, flashScene, recordSession]
   )
 
   const handleBreakComplete = useCallback(() => {
+    if (!enabled) return
     chime()
     announce("Break over", "Ready for the next focus session.")
-  }, [announce, chime])
+  }, [enabled, announce, chime])
 
   const timer = usePomodoroTimer({
     settings,
@@ -317,20 +320,40 @@ export function PomodoroProvider({
   // surface. The server only offers these tools when the module is enabled,
   // but each handler still guards so a stale turn cannot act while disabled.
 
+  const makeStatusPayload = useCallback(
+    (
+      phase: PomodoroPhase,
+      status: PomodoroTimerStatus,
+      remainingMs: number,
+      totalMs: number,
+      cycleCount: number
+    ) => {
+      const currentSettings = settingsRef.current
+      const remainingSeconds = Math.ceil(remainingMs / 1000)
+      return {
+        phase,
+        status,
+        remaining: formatRemainingSeconds(remainingSeconds),
+        remainingSeconds,
+        plannedMinutes: Math.round(totalMs / 60_000),
+        focusSessionsInCurrentCycle:
+          cycleCount % currentSettings.longBreakEvery,
+        longBreakEvery: currentSettings.longBreakEvery,
+      }
+    },
+    []
+  )
+
   const statusPayload = useCallback(() => {
     const current = timerRef.current
-    const currentSettings = settingsRef.current
-    return {
-      phase: current.phase,
-      status: current.status,
-      remaining: formatRemainingSeconds(Math.ceil(current.remainingMs / 1000)),
-      remainingSeconds: Math.ceil(current.remainingMs / 1000),
-      plannedMinutes: Math.round(current.totalMs / 60_000),
-      focusSessionsInCurrentCycle:
-        current.cycleCount % currentSettings.longBreakEvery,
-      longBreakEvery: currentSettings.longBreakEvery,
-    }
-  }, [])
+    return makeStatusPayload(
+      current.phase,
+      current.status,
+      current.remainingMs,
+      current.totalMs,
+      current.cycleCount
+    )
+  }, [makeStatusPayload])
 
   const guardDisabled = useCallback(
     (run: () => ClientToolOutcome): ClientToolOutcome => {
@@ -352,39 +375,101 @@ export function PomodoroProvider({
       if (current.status === "running") {
         return errorOutcome("The timer is already running.")
       }
+      // Compute post-action state: start/resume sets status to "running"
+      const postStatus: PomodoroTimerStatus = "running"
+      const postRemainingMs = current.remainingMs
+
       if (current.status === "paused") current.resume()
       else current.start()
-      return outcome({ started: true, ...statusPayload() })
+
+      return outcome({
+        started: true,
+        ...makeStatusPayload(
+          current.phase,
+          postStatus,
+          postRemainingMs,
+          current.totalMs,
+          current.cycleCount
+        ),
+      })
     })
   )
 
   useRegisterClientTool("pomodoro_pause", () =>
     guardDisabled(() => {
-      if (timerRef.current.status !== "running") {
+      const current = timerRef.current
+      if (current.status !== "running") {
         return errorOutcome("The timer is not running.")
       }
+      // Compute post-action state: pause sets status to "paused"
+      const postStatus: PomodoroTimerStatus = "paused"
+      const postRemainingMs = current.remainingMs
+
       timerRef.current.pause()
-      return outcome({ paused: true, ...statusPayload() })
+
+      return outcome({
+        paused: true,
+        ...makeStatusPayload(
+          current.phase,
+          postStatus,
+          postRemainingMs,
+          current.totalMs,
+          current.cycleCount
+        ),
+      })
     })
   )
 
   useRegisterClientTool("pomodoro_resume", () =>
     guardDisabled(() => {
-      if (timerRef.current.status !== "paused") {
+      const current = timerRef.current
+      if (current.status !== "paused") {
         return errorOutcome("The timer is not paused.")
       }
+      // Compute post-action state: resume sets status to "running"
+      const postStatus: PomodoroTimerStatus = "running"
+      const postRemainingMs = current.remainingMs
+
       timerRef.current.resume()
-      return outcome({ resumed: true, ...statusPayload() })
+
+      return outcome({
+        resumed: true,
+        ...makeStatusPayload(
+          current.phase,
+          postStatus,
+          postRemainingMs,
+          current.totalMs,
+          current.cycleCount
+        ),
+      })
     })
   )
 
   useRegisterClientTool("pomodoro_skip_break", () =>
     guardDisabled(() => {
-      if (timerRef.current.phase === "focus") {
+      const current = timerRef.current
+      if (current.phase === "focus") {
         return errorOutcome("No break is in progress.")
       }
+      // Compute post-action state: skipBreak moves to idle focus phase
+      const currentSettings = settingsRef.current
+      const postPhase: PomodoroPhase = "focus"
+      const postStatus: PomodoroTimerStatus = "idle"
+      const postTotalMs = currentSettings.focusMinutes * 60_000
+      const postRemainingMs = postTotalMs
+
       timerRef.current.skipBreak()
-      return outcome({ skipped: true, ...statusPayload() })
+
+      return outcome({
+        skipped: true,
+        ...makeStatusPayload(
+          postPhase,
+          postStatus,
+          postRemainingMs,
+          postTotalMs,
+          current.cycleCount
+        ),
+      })
     })
   )
 
@@ -394,8 +479,25 @@ export function PomodoroProvider({
       if (current.phase !== "focus" || current.status === "idle") {
         return errorOutcome("No focus session is in progress.")
       }
+      // Compute post-action state: giveUp moves to idle focus phase
+      const currentSettings = settingsRef.current
+      const postPhase: PomodoroPhase = "focus"
+      const postStatus: PomodoroTimerStatus = "idle"
+      const postTotalMs = currentSettings.focusMinutes * 60_000
+      const postRemainingMs = postTotalMs
+
       current.giveUp()
-      return outcome({ abandoned: true, ...statusPayload() })
+
+      return outcome({
+        abandoned: true,
+        ...makeStatusPayload(
+          postPhase,
+          postStatus,
+          postRemainingMs,
+          postTotalMs,
+          current.cycleCount
+        ),
+      })
     })
   )
 

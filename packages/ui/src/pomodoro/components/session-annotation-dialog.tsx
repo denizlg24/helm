@@ -68,6 +68,8 @@ export function SessionAnnotationDialog({
         notes,
       })
       onOpenChange(false)
+    } catch (error) {
+      console.error("Failed to save session annotation:", error)
     } finally {
       setSaving(false)
     }

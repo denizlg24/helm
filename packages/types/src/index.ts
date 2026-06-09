@@ -1456,7 +1456,10 @@ export const PomodoroSettingsSchema = z.object({
 })
 
 export const UpdatePomodoroSettingsInputSchema =
-  PomodoroSettingsSchema.partial()
+  PomodoroSettingsSchema.partial().refine(
+    (data: Record<string, unknown>) => Object.keys(data).length > 0,
+    { message: "At least one field must be provided" }
+  )
 
 export const PomodoroSessionSchema = z.object({
   id: z.string().min(1),
@@ -1476,22 +1479,53 @@ export const PomodoroSessionSchema = z.object({
   updatedAt: z.coerce.date(),
 })
 
-export const CreatePomodoroSessionInputSchema = z.object({
-  status: PomodoroSessionStatusSchema,
-  startedAt: z.coerce.date(),
-  endedAt: z.coerce.date(),
-  plannedMinutes: z.number().int().min(1).max(180),
-  completedSeconds: z.number().int().nonnegative(),
-  subject: z.string().max(200).nullable().optional(),
-  topics: z.array(z.string().min(1).max(60)).max(20).optional(),
-  notes: z.string().max(20_000).optional(),
-})
+export const CreatePomodoroSessionInputSchema = z
+  .object({
+    status: PomodoroSessionStatusSchema,
+    startedAt: z.coerce.date(),
+    endedAt: z.coerce.date(),
+    plannedMinutes: z.number().int().min(1).max(180),
+    completedSeconds: z.number().int().nonnegative(),
+    subject: z.string().max(200).nullable().optional(),
+    topics: z.array(z.string().min(1).max(60)).max(20).optional(),
+    notes: z.string().max(20_000).optional(),
+  })
+  .superRefine(
+    (
+      data: {
+        startedAt: Date
+        endedAt: Date
+        plannedMinutes: number
+        completedSeconds: number
+      },
+      ctx: z.RefinementCtx
+    ) => {
+      if (data.endedAt.getTime() < data.startedAt.getTime()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "endedAt must not be before startedAt",
+          path: ["endedAt"],
+        })
+      }
+      if (data.completedSeconds > data.plannedMinutes * 60) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "completedSeconds must not exceed plannedMinutes * 60",
+          path: ["completedSeconds"],
+        })
+      }
+    }
+  )
 
-export const UpdatePomodoroSessionInputSchema = z.object({
-  subject: z.string().max(200).nullable().optional(),
-  topics: z.array(z.string().min(1).max(60)).max(20).optional(),
-  notes: z.string().max(20_000).optional(),
-})
+export const UpdatePomodoroSessionInputSchema = z
+  .object({
+    subject: z.string().max(200).nullable().optional(),
+    topics: z.array(z.string().min(1).max(60)).max(20).optional(),
+    notes: z.string().max(20_000).optional(),
+  })
+  .refine((data: Record<string, unknown>) => Object.keys(data).length > 0, {
+    message: "At least one field must be provided",
+  })
 
 export const PomodoroSessionsQuerySchema = z.object({
   from: z.coerce.date().optional(),

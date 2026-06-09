@@ -152,6 +152,7 @@ export function usePomodoroTimer({
   const stateRef = useRef(state)
   stateRef.current = state
   const handledEndRef = useRef<number | null>(null)
+  const pendingSaveRef = useRef<Promise<void>>(Promise.resolve())
 
   useEffect(() => {
     let cancelled = false
@@ -161,32 +162,50 @@ export function usePomodoroTimer({
         if (cancelled || raw === null) return
         const parsed = SnapshotSchema.safeParse(JSON.parse(raw))
         if (!parsed.success) return
-        const snapshot = parsed.data
+        let snapshot = parsed.data
         const current = settingsRef.current
-        if (
+        const now = Date.now()
+
+        // Settle all expired phases that completed while the host was closed.
+        while (
           snapshot.status === "running" &&
           snapshot.endsAt !== null &&
-          snapshot.endsAt <= Date.now()
+          snapshot.endsAt <= now
         ) {
-          // The timer elapsed while the host was closed. Settle it now instead
-          // of resuming a finished countdown.
           if (snapshot.phase === "focus") {
             onFocusCompleteRef.current(
               focusResultFromState(snapshot, snapshot.endsAt)
             )
             const cycleCount = snapshot.cycleCount + 1
-            setState(
-              idlePhaseState(
-                nextBreakPhase(cycleCount, current),
-                current,
-                cycleCount
-              )
-            )
+            const breakPhase = nextBreakPhase(cycleCount, current)
+            const next = idlePhaseState(breakPhase, current, cycleCount)
+            if (current.autoStartBreaks) {
+              snapshot = {
+                ...next,
+                status: "running",
+                endsAt: snapshot.endsAt + next.totalMs,
+              }
+            } else {
+              snapshot = next
+              break
+            }
           } else {
-            setState(idlePhaseState("focus", current, snapshot.cycleCount))
+            onBreakCompleteRef.current?.()
+            const next = idlePhaseState("focus", current, snapshot.cycleCount)
+            if (current.autoStartFocus) {
+              snapshot = {
+                ...next,
+                status: "running",
+                endsAt: snapshot.endsAt + next.totalMs,
+                focusStartedAt: snapshot.endsAt,
+              }
+            } else {
+              snapshot = next
+              break
+            }
           }
-          return
         }
+
         setState(snapshot)
       })
       .catch(() => {
@@ -202,9 +221,12 @@ export function usePomodoroTimer({
 
   useEffect(() => {
     if (!restored) return
-    void store.save(JSON.stringify(state)).catch(() => {
-      // Persistence is best-effort; the timer keeps running in memory.
-    })
+    const snapshot = JSON.stringify(state)
+    pendingSaveRef.current = pendingSaveRef.current
+      .then(() => store.save(snapshot))
+      .catch(() => {
+        // Persistence is best-effort; the timer keeps running in memory.
+      })
   }, [restored, state, store])
 
   useEffect(() => {

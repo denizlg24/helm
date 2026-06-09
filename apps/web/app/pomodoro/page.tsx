@@ -23,6 +23,7 @@ export default function PomodoroPage() {
     | { kind: "checking" }
     | { kind: "allowed" }
     | { kind: "denied"; workspaceId?: string }
+    | { kind: "error"; error?: unknown }
   >({ kind: "checking" })
 
   const resolveWorkspace = useCallback(async () => {
@@ -57,8 +58,11 @@ export default function PomodoroPage() {
               }
         )
       })
-      .catch(() => {
-        if (!cancelled) setAccess({ kind: "denied" })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error("Failed to check Pomodoro access:", error)
+          setAccess({ kind: "error", error })
+        }
       })
 
     return () => {
@@ -88,6 +92,29 @@ export default function PomodoroPage() {
             variant="outline"
           >
             Back to dashboard
+          </Button>
+        </div>
+      </main>
+    )
+  }
+
+  if (access.kind === "error") {
+    return (
+      <main className="flex min-h-svh items-center justify-center bg-background px-6">
+        <div className="w-full max-w-md text-center">
+          <p className="font-medium text-foreground text-lg">
+            Could not load Pomodoro
+          </p>
+          <p className="mt-2 text-muted-foreground text-sm">
+            An error occurred while checking module access. Please try again.
+          </p>
+          <Button
+            className="mt-6"
+            onClick={() => setAccess({ kind: "checking" })}
+            type="button"
+            variant="outline"
+          >
+            Retry
           </Button>
         </div>
       </main>

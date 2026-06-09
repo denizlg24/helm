@@ -111,6 +111,8 @@ export function PomodoroSettingsDialog({
     try {
       await onSave(draft)
       onOpenChange(false)
+    } catch (error) {
+      console.error("Failed to save Pomodoro settings:", error)
     } finally {
       setSaving(false)
     }

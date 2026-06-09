@@ -84,11 +84,8 @@ export function usePublishBackgroundActivity(
   useEffect(() => {
     if (!set) return
     set(key, item)
+    return () => set(key, null)
   }, [set, key, item])
-  // Clear on unmount only — separate effect so item updates don't flicker.
-  const cleanupRef = useRef<(() => void) | null>(null)
-  cleanupRef.current = set ? () => set(key, null) : null
-  useEffect(() => () => cleanupRef.current?.(), [])
 }
 
 // Items for AppHeader's activity panel. Empty without a provider, so module

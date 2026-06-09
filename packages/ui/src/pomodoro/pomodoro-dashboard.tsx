@@ -62,6 +62,7 @@ export function PomodoroDashboard({
   const [sessions, setSessions] = useState<PomodoroSession[]>([])
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [annotating, setAnnotating] = useState<PomodoroSession | null>(null)
+  const [workspaceError, setWorkspaceError] = useState<unknown>(null)
 
   const { client, settings } = pomodoro
 
@@ -89,13 +90,18 @@ export function PomodoroDashboard({
 
   useEffect(() => {
     let cancelled = false
+    setWorkspaceError(null)
     onResolveWorkspace()
       .then(() => {
-        if (!cancelled) setReady(true)
+        if (!cancelled) {
+          setReady(true)
+          setWorkspaceError(null)
+        }
       })
       .catch((error) => {
         if (!cancelled) {
-          toast.error(getErrorMessage(error, "Could not resolve workspace"))
+          setWorkspaceError(error)
+          setReady(false)
         }
       })
     return () => {
@@ -231,6 +237,35 @@ export function PomodoroDashboard({
       user={user}
     />
   )
+
+  if (workspaceError) {
+    return (
+      <div className="flex min-h-svh flex-col bg-background">
+        {header}
+        <div className="flex flex-1 items-center justify-center">
+          <div className="w-full max-w-md px-6 text-center">
+            <p className="font-medium text-foreground text-lg">
+              Could not resolve workspace
+            </p>
+            <p className="mt-2 text-muted-foreground text-sm">
+              {getErrorMessage(workspaceError, "An unexpected error occurred")}
+            </p>
+            <Button
+              className="mt-6"
+              onClick={() => {
+                setWorkspaceError(null)
+                setReady(false)
+              }}
+              type="button"
+              variant="outline"
+            >
+              Retry
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (!ready || loading) {
     return (
