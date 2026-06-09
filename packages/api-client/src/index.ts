@@ -18,6 +18,7 @@ import {
   createOnboardingModule,
   type OnboardingModule,
 } from "./modules/onboarding"
+import { createPomodoroModule, type PomodoroModule } from "./modules/pomodoro"
 import { createUsageModule, type UsageModule } from "./modules/usage"
 import { createUserModule, type UserModule } from "./modules/user"
 import {
@@ -39,6 +40,7 @@ export interface HelmApiClient {
   onboarding: OnboardingModule
   assistant: AssistantModule
   notes: NotesModule
+  pomodoro: PomodoroModule
   files: FilesModule
   usage: UsageModule
   desktopInstaller: DesktopInstallerModule
@@ -58,6 +60,7 @@ export const createHelmApiClient = (
     onboarding: createOnboardingModule(requestClient),
     assistant: createAssistantModule(requestClient),
     notes: createNotesModule(requestClient),
+    pomodoro: createPomodoroModule(requestClient),
     files: createFilesModule(requestClient),
     usage: createUsageModule(requestClient),
     desktopInstaller: createDesktopInstallerModule(requestClient),

@@ -7,9 +7,11 @@ import {
   SurfaceContextProvider,
 } from "@workspace/ui/assistant/bridge"
 import { Toaster } from "@workspace/ui/components/sonner"
+import { BackgroundActivityProvider } from "@workspace/ui/lib/background-activity"
 import { cn } from "@workspace/ui/lib/utils"
 import { AssistantDock } from "@/components/assistant-dock"
 import { CommandPalette } from "@/components/command-palette"
+import { PomodoroHostProvider } from "@/components/pomodoro-host-provider"
 import { SettingsProvider } from "@/components/settings/settings-provider"
 import { ThemeProvider } from "@/components/theme-provider"
 
@@ -42,10 +44,14 @@ export default function RootLayout({
             <SurfaceContextProvider>
               <ClientToolsProvider>
                 <DataInvalidationProvider>
-                  {children}
-                  <AssistantDock />
-                  <CommandPalette />
-                  <Toaster position="bottom-right" />
+                  <BackgroundActivityProvider>
+                    <PomodoroHostProvider>
+                      {children}
+                      <AssistantDock />
+                      <CommandPalette />
+                      <Toaster position="bottom-right" />
+                    </PomodoroHostProvider>
+                  </BackgroundActivityProvider>
                 </DataInvalidationProvider>
               </ClientToolsProvider>
             </SurfaceContextProvider>

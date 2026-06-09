@@ -61,6 +61,7 @@
     "./components/*": "./src/components/*.tsx",
     "./assistant/*": "./src/assistant/*.tsx",
     "./notes/*": "./src/notes/*.tsx",
+    "./pomodoro/*": "./src/pomodoro/*.tsx",
     "./settings/*": "./src/settings/*.tsx",
     "./hooks/*": "./src/hooks/*.ts"
   }

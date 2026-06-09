@@ -19,6 +19,12 @@ import {
   UserSettingsSchema,
 } from "@workspace/types"
 import {
+  ClientToolsProvider,
+  DataInvalidationProvider,
+  useClientToolDispatcher,
+  useDataInvalidator,
+} from "@workspace/ui/assistant/bridge"
+import {
   AppHeader,
   type AppHeaderUser,
 } from "@workspace/ui/components/app-header"
@@ -27,9 +33,15 @@ import {
   type CommandPaletteEntry,
   CommandPaletteOverlay,
 } from "@workspace/ui/components/command-palette-overlay"
+import { Toaster } from "@workspace/ui/components/sonner"
 import { Spinner } from "@workspace/ui/components/spinner"
+import {
+  BackgroundActivityProvider,
+  useBackgroundActivities,
+} from "@workspace/ui/lib/background-activity"
 import { useSettingsUpdater } from "@workspace/ui/lib/use-settings-updater"
 import { cn } from "@workspace/ui/lib/utils"
+import { PomodoroProvider } from "@workspace/ui/pomodoro/pomodoro-provider"
 import { SettingsView } from "@workspace/ui/settings/settings-view"
 import type { LucideIcon } from "lucide-react"
 import {
@@ -66,6 +78,7 @@ import { apiClient, setApiToken, setApiWorkspaceId } from "../lib/api"
 import { applyAppearanceMode, cacheAppearanceMode } from "../lib/appearance"
 import { featureGatedImport } from "../lib/feature-gated-import"
 import { isFeatureEnabled } from "../lib/features"
+import { tauriPomodoroTimerStore } from "../lib/pomodoro-store"
 import { WindowControls } from "./window-controls"
 
 const DEFAULT_SETTINGS = UserSettingsSchema.parse({})
@@ -134,6 +147,32 @@ const NotesDashboard = lazy(async () => {
   return { default: module.NotesDashboard }
 })
 
+const PomodoroDashboard = lazy(async () => {
+  const module = await featureGatedImport(
+    "pomodoro",
+    () => import("@workspace/ui/pomodoro/pomodoro-dashboard")
+  )
+
+  if (!module) {
+    return {
+      default: () => (
+        <div className="flex h-svh items-center justify-center bg-background px-6 text-center">
+          <div className="max-w-sm">
+            <p className="font-medium text-foreground">
+              Pomodoro is not bundled
+            </p>
+            <p className="mt-2 text-muted-foreground text-sm">
+              This desktop build does not include the Pomodoro module.
+            </p>
+          </div>
+        </div>
+      ),
+    }
+  }
+
+  return { default: module.PomodoroDashboard }
+})
+
 const ICON_MAP: Record<string, LucideIcon> = {
   AlarmClock,
   Bot,
@@ -156,7 +195,13 @@ const ICON_MAP: Record<string, LucideIcon> = {
   UsersRound,
 }
 
-const DESKTOP_SURFACES = new Set(["assistant", "home", "notes", "settings"])
+const DESKTOP_SURFACES = new Set([
+  "assistant",
+  "home",
+  "notes",
+  "pomodoro",
+  "settings",
+])
 
 export interface DesktopDashboardProps {
   token: string
@@ -164,14 +209,30 @@ export interface DesktopDashboardProps {
   onDisconnect: () => void
 }
 
-export function DesktopDashboard({
+// Outer shell: mounts the assistant bridges (client tools, invalidation) and
+// the background-activity store so app-wide providers like the pomodoro timer
+// can register tools and surface header activity.
+export function DesktopDashboard(props: DesktopDashboardProps) {
+  return (
+    <ClientToolsProvider>
+      <DataInvalidationProvider>
+        <BackgroundActivityProvider>
+          <DesktopDashboardInner {...props} />
+          <Toaster position="bottom-right" />
+        </BackgroundActivityProvider>
+      </DataInvalidationProvider>
+    </ClientToolsProvider>
+  )
+}
+
+function DesktopDashboardInner({
   token,
   user,
   onDisconnect,
 }: DesktopDashboardProps) {
-  const [surface, setSurface] = useState<"assistant" | "notes" | "settings">(
-    "assistant"
-  )
+  const [surface, setSurface] = useState<
+    "assistant" | "notes" | "pomodoro" | "settings"
+  >("assistant")
   const [ready, setReady] = useState(false)
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS)
   const [conversations, setConversations] = useState<
@@ -194,11 +255,17 @@ export function DesktopDashboard({
     }
   }, [])
 
+  const dispatchClientTool = useClientToolDispatcher()
+  const invalidate = useDataInvalidator()
+  const backgroundActivities = useBackgroundActivities()
+
   const chat = useAssistantChat({
     client: apiClient,
     onConversationChange: () => {
       void refresh()
     },
+    dispatchClientTool,
+    onDataMutation: invalidate,
   })
 
   const resolveWorkspace = useCallback(async () => {
@@ -242,12 +309,20 @@ export function DesktopDashboard({
 
   const notesAvailable =
     enabledModules.has("notes") && isFeatureEnabled("notes")
+  const pomodoroAvailable =
+    enabledModules.has("pomodoro") && isFeatureEnabled("pomodoro")
 
   useEffect(() => {
     if (surface === "notes" && !notesAvailable) {
       setSurface("assistant")
     }
   }, [notesAvailable, surface])
+
+  useEffect(() => {
+    if (surface === "pomodoro" && !pomodoroAvailable) {
+      setSurface("assistant")
+    }
+  }, [pomodoroAvailable, surface])
 
   useEffect(() => {
     if (ready) void refresh()
@@ -334,6 +409,8 @@ export function DesktopDashboard({
   const handleCommandSelect = useCallback((entry: CommandPaletteEntry) => {
     if (entry.id === "notes") {
       setSurface("notes")
+    } else if (entry.id === "pomodoro") {
+      setSurface("pomodoro")
     } else if (entry.id === "settings") {
       setSurface("settings")
     } else {
@@ -352,85 +429,96 @@ export function DesktopDashboard({
     }
   }, [])
 
-  if (!ready) {
-    return (
-      <div className="flex h-svh items-center justify-center">
-        <Spinner className="size-5 text-muted-foreground" />
-      </div>
-    )
-  }
-
-  if (surface === "settings") {
-    return (
-      <div className="flex h-svh w-full flex-col overflow-hidden bg-background">
-        <CommandPaletteOverlay
-          entries={commandEntries}
-          shortcut={settings.shortcuts.commandPalette}
-          onSelect={handleCommandSelect}
-        />
-        <header
-          data-tauri-drag-region
-          className={cn(
-            "flex h-12 shrink-0 items-center gap-2 border-border border-b px-3",
-            isMac && "pl-20"
-          )}
-        >
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="Back"
-            onClick={() => setSurface("assistant")}
-          >
-            <ArrowLeft className="size-4" />
-          </Button>
-          <span className="font-medium text-sm">Settings</span>
-          <div className="ml-auto">
-            <WindowControls />
-          </div>
-        </header>
-        <main className="min-h-0 flex-1 overflow-y-auto px-4 py-8">
-          <SettingsView
-            groups={settingsGroups}
-            fields={settingsFields}
-            values={settings}
-            platform="desktop"
-            onChange={updateSetting}
-          />
-        </main>
-      </div>
-    )
-  }
-
-  if (surface === "notes") {
-    return (
-      <Suspense
-        fallback={
-          <div className="flex h-svh items-center justify-center">
-            <Spinner className="size-5 text-muted-foreground" />
-          </div>
-        }
+  const surfaceContent = !ready ? (
+    <div className="flex h-svh items-center justify-center">
+      <Spinner className="size-5 text-muted-foreground" />
+    </div>
+  ) : surface === "settings" ? (
+    <div className="flex h-svh w-full flex-col overflow-hidden bg-background">
+      <CommandPaletteOverlay
+        entries={commandEntries}
+        shortcut={settings.shortcuts.commandPalette}
+        onSelect={handleCommandSelect}
+      />
+      <header
+        data-tauri-drag-region
+        className={cn(
+          "flex h-12 shrink-0 items-center gap-2 border-border border-b px-3",
+          isMac && "pl-20"
+        )}
       >
-        <CommandPaletteOverlay
-          entries={commandEntries}
-          shortcut={settings.shortcuts.commandPalette}
-          onSelect={handleCommandSelect}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label="Back"
+          onClick={() => setSurface("assistant")}
+        >
+          <ArrowLeft className="size-4" />
+        </Button>
+        <span className="font-medium text-sm">Settings</span>
+        <div className="ml-auto">
+          <WindowControls />
+        </div>
+      </header>
+      <main className="min-h-0 flex-1 overflow-y-auto px-4 py-8">
+        <SettingsView
+          groups={settingsGroups}
+          fields={settingsFields}
+          values={settings}
+          platform="desktop"
+          onChange={updateSetting}
         />
-        <NotesDashboard
-          client={apiClient}
-          headerClassName={isMac ? "pl-20" : undefined}
-          headerDragRegion
-          headerEndSlot={<WindowControls />}
-          onResolveWorkspace={resolveWorkspace}
-          onSettings={() => setSurface("settings")}
-          onSignOut={async () => onDisconnect()}
-          user={displayUser}
-        />
-      </Suspense>
-    )
-  }
-
-  return (
+      </main>
+    </div>
+  ) : surface === "notes" ? (
+    <Suspense
+      fallback={
+        <div className="flex h-svh items-center justify-center">
+          <Spinner className="size-5 text-muted-foreground" />
+        </div>
+      }
+    >
+      <CommandPaletteOverlay
+        entries={commandEntries}
+        shortcut={settings.shortcuts.commandPalette}
+        onSelect={handleCommandSelect}
+      />
+      <NotesDashboard
+        client={apiClient}
+        headerClassName={isMac ? "pl-20" : undefined}
+        headerDragRegion
+        headerEndSlot={<WindowControls />}
+        onResolveWorkspace={resolveWorkspace}
+        onSettings={() => setSurface("settings")}
+        onSignOut={async () => onDisconnect()}
+        user={displayUser}
+      />
+    </Suspense>
+  ) : surface === "pomodoro" ? (
+    <Suspense
+      fallback={
+        <div className="flex h-svh items-center justify-center">
+          <Spinner className="size-5 text-muted-foreground" />
+        </div>
+      }
+    >
+      <CommandPaletteOverlay
+        entries={commandEntries}
+        shortcut={settings.shortcuts.commandPalette}
+        onSelect={handleCommandSelect}
+      />
+      <PomodoroDashboard
+        headerClassName={isMac ? "pl-20" : undefined}
+        headerDragRegion
+        headerEndSlot={<WindowControls />}
+        onResolveWorkspace={resolveWorkspace}
+        onSettings={() => setSurface("settings")}
+        onSignOut={async () => onDisconnect()}
+        user={displayUser}
+      />
+    </Suspense>
+  ) : (
     <div className="flex h-svh w-full overflow-hidden bg-background">
       <CommandPaletteOverlay
         entries={commandEntries}
@@ -476,7 +564,7 @@ export function DesktopDashboard({
           user={displayUser}
           onSettings={() => setSurface("settings")}
           onLogout={onDisconnect}
-          backgroundItems={[]}
+          backgroundItems={backgroundActivities}
           notifications={[]}
           endSlot={<WindowControls />}
         />
@@ -486,5 +574,15 @@ export function DesktopDashboard({
         </main>
       </div>
     </div>
+  )
+
+  return (
+    <PomodoroProvider
+      client={apiClient}
+      enabled={ready && pomodoroAvailable}
+      timerStore={tauriPomodoroTimerStore}
+    >
+      {surfaceContent}
+    </PomodoroProvider>
   )
 }

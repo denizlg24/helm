@@ -362,6 +362,210 @@ const notesRewriteOpen: AssistantToolDeclaration = {
   moduleId: "notes",
 }
 
+// --- Pomodoro ------------------------------------------------------------------
+// Timer control runs on the client (the countdown lives in the host app and,
+// on desktop, persists through Rust). Settings and the session log live on the
+// server, so those tools run in the assistant loop.
+
+const pomodoroStatus: AssistantToolDeclaration = {
+  name: "pomodoro_status",
+  description:
+    "Read the current state of the user's pomodoro timer: phase (focus or break), whether it is running/paused/idle, time remaining, and progress through the long-break cycle.",
+  inputSchema: z.object({}),
+  side: "client",
+  risk: "auto",
+  moduleId: "pomodoro",
+}
+
+const pomodoroStart: AssistantToolDeclaration = {
+  name: "pomodoro_start",
+  description:
+    "Start the pomodoro countdown for the current phase (focus session or break). Resumes if the timer is paused. Fails if it is already running.",
+  inputSchema: z.object({}),
+  side: "client",
+  risk: "auto",
+  moduleId: "pomodoro",
+}
+
+const pomodoroPause: AssistantToolDeclaration = {
+  name: "pomodoro_pause",
+  description: "Pause the running pomodoro countdown.",
+  inputSchema: z.object({}),
+  side: "client",
+  risk: "auto",
+  moduleId: "pomodoro",
+}
+
+const pomodoroResume: AssistantToolDeclaration = {
+  name: "pomodoro_resume",
+  description: "Resume a paused pomodoro countdown.",
+  inputSchema: z.object({}),
+  side: "client",
+  risk: "auto",
+  moduleId: "pomodoro",
+}
+
+const pomodoroSkipBreak: AssistantToolDeclaration = {
+  name: "pomodoro_skip_break",
+  description:
+    "Skip the current break and return the timer to an idle focus session, ready to start.",
+  inputSchema: z.object({}),
+  side: "client",
+  risk: "auto",
+  moduleId: "pomodoro",
+}
+
+const pomodoroGiveUp: AssistantToolDeclaration = {
+  name: "pomodoro_give_up",
+  description:
+    "Abandon the focus session in progress. Sessions longer than a minute are logged as abandoned; the countdown resets. Only use when the user clearly asks to stop or abandon the session.",
+  inputSchema: z.object({}),
+  side: "client",
+  risk: "auto",
+  moduleId: "pomodoro",
+}
+
+const pomodoroGetSettings: AssistantToolDeclaration = {
+  name: "pomodoro_get_settings",
+  description:
+    "Read the workspace's pomodoro timer settings: focus/break durations, long-break cadence, daily goal, and behavior toggles.",
+  inputSchema: z.object({}),
+  side: "server",
+  risk: "auto",
+  moduleId: "pomodoro",
+}
+
+const pomodoroUpdateSettings: AssistantToolDeclaration = {
+  name: "pomodoro_update_settings",
+  description:
+    "Update the workspace's pomodoro timer settings. Only pass the fields to change. Changes apply to the next countdown.",
+  inputSchema: z.object({
+    focusMinutes: z
+      .number()
+      .int()
+      .min(1)
+      .max(180)
+      .optional()
+      .describe("Length of a focus session in minutes."),
+    shortBreakMinutes: z
+      .number()
+      .int()
+      .min(1)
+      .max(60)
+      .optional()
+      .describe("Length of a short break in minutes."),
+    longBreakMinutes: z
+      .number()
+      .int()
+      .min(1)
+      .max(120)
+      .optional()
+      .describe("Length of a long break in minutes."),
+    longBreakEvery: z
+      .number()
+      .int()
+      .min(1)
+      .max(12)
+      .optional()
+      .describe("Number of focus sessions between long breaks."),
+    autoStartBreaks: z
+      .boolean()
+      .optional()
+      .describe("Start breaks automatically when a focus session ends."),
+    autoStartFocus: z
+      .boolean()
+      .optional()
+      .describe("Start the next focus session automatically after a break."),
+    soundEnabled: z
+      .boolean()
+      .optional()
+      .describe("Play a chime when a phase ends."),
+    notificationsEnabled: z
+      .boolean()
+      .optional()
+      .describe("Show a notification when a phase ends."),
+    dailyGoalSessions: z
+      .number()
+      .int()
+      .min(1)
+      .max(24)
+      .optional()
+      .describe("Target number of completed focus sessions per day."),
+  }),
+  side: "server",
+  risk: "auto",
+  moduleId: "pomodoro",
+  mutates: true,
+}
+
+const pomodoroListSessions: AssistantToolDeclaration = {
+  name: "pomodoro_list_sessions",
+  description:
+    "List the user's recorded pomodoro sessions (most recent first). Each row has id, status (completed/abandoned), start time, planned vs completed duration, subject, topics, and a notes snippet. Use to answer 'what did I focus on', daily/weekly summaries, or to resolve a session id before updating it.",
+  inputSchema: z.object({
+    from: z
+      .string()
+      .optional()
+      .describe("ISO 8601 lower bound for the session start time."),
+    to: z
+      .string()
+      .optional()
+      .describe("ISO 8601 upper bound for the session start time."),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(200)
+      .optional()
+      .describe("Maximum rows to return. Defaults to 50."),
+  }),
+  side: "server",
+  risk: "auto",
+  moduleId: "pomodoro",
+}
+
+const pomodoroUpdateSession: AssistantToolDeclaration = {
+  name: "pomodoro_update_session",
+  description:
+    "Annotate a recorded pomodoro session: set its subject, topics, or markdown notes. Only pass the fields to change. Resolve the id with pomodoro_list_sessions first.",
+  inputSchema: z.object({
+    id: z.string().min(1).describe("The session id."),
+    subject: z
+      .string()
+      .max(200)
+      .nullable()
+      .optional()
+      .describe("Short subject line, or null to clear it."),
+    topics: z
+      .array(z.string().min(1).max(60))
+      .max(20)
+      .optional()
+      .describe("Topic tags. Replaces the existing list."),
+    notes: z
+      .string()
+      .max(20_000)
+      .optional()
+      .describe("Markdown notes. Replaces the existing notes."),
+  }),
+  side: "server",
+  risk: "auto",
+  moduleId: "pomodoro",
+  mutates: true,
+}
+
+const pomodoroDeleteSession: AssistantToolDeclaration = {
+  name: "pomodoro_delete_session",
+  description:
+    "Permanently delete a recorded pomodoro session and its notes. Destructive and irreversible.",
+  inputSchema: z.object({
+    id: z.string().min(1).describe("The session id."),
+  }),
+  side: "server",
+  risk: "approval",
+  moduleId: "pomodoro",
+  mutates: true,
+}
+
 // --- Registry ----------------------------------------------------------------
 
 export const assistantToolDeclarations: readonly AssistantToolDeclaration[] = [
@@ -381,6 +585,17 @@ export const assistantToolDeclarations: readonly AssistantToolDeclaration[] = [
   notesListTags,
   notesSummarize,
   notesRewriteOpen,
+  pomodoroStatus,
+  pomodoroStart,
+  pomodoroPause,
+  pomodoroResume,
+  pomodoroSkipBreak,
+  pomodoroGiveUp,
+  pomodoroGetSettings,
+  pomodoroUpdateSettings,
+  pomodoroListSessions,
+  pomodoroUpdateSession,
+  pomodoroDeleteSession,
 ]
 
 const byName: ReadonlyMap<string, AssistantToolDeclaration> = new Map(

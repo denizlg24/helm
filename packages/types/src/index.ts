@@ -1436,3 +1436,98 @@ export type SettingsFieldDescriptor = z.infer<
 export type SettingsGroupDescriptor = z.infer<
   typeof SettingsGroupDescriptorSchema
 >
+
+// --- Pomodoro ----------------------------------------------------------------
+
+export const PomodoroSessionStatusSchema = z.enum(["completed", "abandoned"])
+
+// Workspace-level timer preferences. Every field has a default so a workspace
+// without a saved settings document still resolves to a usable configuration.
+export const PomodoroSettingsSchema = z.object({
+  focusMinutes: z.number().int().min(1).max(180).default(25),
+  shortBreakMinutes: z.number().int().min(1).max(60).default(5),
+  longBreakMinutes: z.number().int().min(1).max(120).default(15),
+  longBreakEvery: z.number().int().min(1).max(12).default(4),
+  autoStartBreaks: z.boolean().default(false),
+  autoStartFocus: z.boolean().default(false),
+  soundEnabled: z.boolean().default(true),
+  notificationsEnabled: z.boolean().default(true),
+  dailyGoalSessions: z.number().int().min(1).max(24).default(4),
+})
+
+export const UpdatePomodoroSettingsInputSchema =
+  PomodoroSettingsSchema.partial()
+
+export const PomodoroSessionSchema = z.object({
+  id: z.string().min(1),
+  tenantId: z.string().min(1),
+  workspaceId: z.string().min(1),
+  status: PomodoroSessionStatusSchema,
+  startedAt: z.coerce.date(),
+  endedAt: z.coerce.date(),
+  plannedMinutes: z.number().int().min(1).max(180),
+  completedSeconds: z.number().int().nonnegative(),
+  subject: z.string().max(200).nullable(),
+  topics: z.array(z.string().min(1).max(60)).max(20),
+  // Free-form annotation rendered as markdown.
+  notes: z.string().max(20_000),
+  createdByUserId: z.string().min(1),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+})
+
+export const CreatePomodoroSessionInputSchema = z.object({
+  status: PomodoroSessionStatusSchema,
+  startedAt: z.coerce.date(),
+  endedAt: z.coerce.date(),
+  plannedMinutes: z.number().int().min(1).max(180),
+  completedSeconds: z.number().int().nonnegative(),
+  subject: z.string().max(200).nullable().optional(),
+  topics: z.array(z.string().min(1).max(60)).max(20).optional(),
+  notes: z.string().max(20_000).optional(),
+})
+
+export const UpdatePomodoroSessionInputSchema = z.object({
+  subject: z.string().max(200).nullable().optional(),
+  topics: z.array(z.string().min(1).max(60)).max(20).optional(),
+  notes: z.string().max(20_000).optional(),
+})
+
+export const PomodoroSessionsQuerySchema = z.object({
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(200),
+})
+
+export const PomodoroSettingsResponseSchema = z.object({
+  settings: PomodoroSettingsSchema,
+})
+export const PomodoroSessionsResponseSchema = z.object({
+  sessions: z.array(PomodoroSessionSchema),
+})
+export const PomodoroSessionDetailResponseSchema = z.object({
+  session: PomodoroSessionSchema,
+})
+
+export type PomodoroSessionStatus = z.infer<typeof PomodoroSessionStatusSchema>
+export type PomodoroSettings = z.infer<typeof PomodoroSettingsSchema>
+export type UpdatePomodoroSettingsInput = z.infer<
+  typeof UpdatePomodoroSettingsInputSchema
+>
+export type PomodoroSession = z.infer<typeof PomodoroSessionSchema>
+export type CreatePomodoroSessionInput = z.infer<
+  typeof CreatePomodoroSessionInputSchema
+>
+export type UpdatePomodoroSessionInput = z.infer<
+  typeof UpdatePomodoroSessionInputSchema
+>
+export type PomodoroSessionsQuery = z.infer<typeof PomodoroSessionsQuerySchema>
+export type PomodoroSettingsResponse = z.infer<
+  typeof PomodoroSettingsResponseSchema
+>
+export type PomodoroSessionsResponse = z.infer<
+  typeof PomodoroSessionsResponseSchema
+>
+export type PomodoroSessionDetailResponse = z.infer<
+  typeof PomodoroSessionDetailResponseSchema
+>
