@@ -28,7 +28,7 @@ export class NotificationsEventsService
   constructor(private readonly redis: RedisService) {}
 
   async onModuleInit() {
-    const subscriber = this.redis.client.duplicate()
+    const subscriber = this.redis.client.duplicate({ lazyConnect: true })
     subscriber.on("message", (channel: string, message: string) => {
       this.dispatch(channel, message)
     })
