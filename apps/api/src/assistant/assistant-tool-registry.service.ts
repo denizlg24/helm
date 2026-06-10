@@ -10,7 +10,7 @@ import {
 } from "@workspace/assistant-tools"
 import type { AuthContext } from "@workspace/types"
 // biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
-import { EntitlementService } from "../entitlements/entitlement.service"
+import { ModuleConfigService } from "../module-configs/module-config.service"
 import {
   ASSISTANT_TOOL_METADATA,
   type AssistantServerToolHandler,
@@ -53,7 +53,7 @@ export class AssistantToolRegistry implements OnModuleInit {
 
   constructor(
     private readonly discovery: DiscoveryService,
-    private readonly entitlementService: EntitlementService
+    private readonly moduleConfigService: ModuleConfigService
   ) {}
 
   onModuleInit(): void {
@@ -81,27 +81,21 @@ export class AssistantToolRegistry implements OnModuleInit {
   }
 
   // Declarations exposed to the model this turn: every client tool plus every
-  // server tool that has a bound handler, filtered by module entitlements.
+  // server tool that has a bound handler, filtered by the workspace's enabled
+  // modules (ModuleConfig — entitlements gate enablement at purchase time, not
+  // here).
   async availableDeclarations(
     actor: AuthContext
   ): Promise<AssistantToolDeclaration[]> {
-    const baseDeclarations = assistantToolDeclarations.filter(
-      (declaration) =>
-        declaration.side === "client" || this.handlers.has(declaration.name)
+    const enabledModuleIds = new Set(
+      await this.moduleConfigService.listEnabledModuleIds(actor.workspaceId)
     )
-
-    const filtered: AssistantToolDeclaration[] = []
-    for (const declaration of baseDeclarations) {
-      // Check if the actor's workspace has the module enabled
-      const hasModule = await this.entitlementService.hasFeature(
-        actor.workspaceId,
-        declaration.moduleId
-      )
-      if (hasModule) {
-        filtered.push(declaration)
-      }
-    }
-    return filtered
+    return assistantToolDeclarations.filter(
+      (declaration) =>
+        (declaration.side === "client" ||
+          this.handlers.has(declaration.name)) &&
+        enabledModuleIds.has(declaration.moduleId)
+    )
   }
 
   async toolDefinitions(actor: AuthContext): Promise<Anthropic.Tool[]> {
