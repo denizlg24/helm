@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common"
 import { AuditModule } from "../audit/audit.module"
 import { EntitlementModule } from "../entitlements/entitlement.module"
 import { ModuleConfigModule } from "../module-configs/module-config.module"
+import { NotificationsModule } from "../notifications/notifications.module"
 import { OnboardingModule } from "../onboarding/onboarding.module"
 import { UsageModule } from "../usage/usage.module"
 import { BillingController } from "./billing.controller"
@@ -17,6 +18,7 @@ import { PolarWebhookService } from "./polar-webhook.service"
     UsageModule,
     AuditModule,
     OnboardingModule,
+    NotificationsModule,
   ],
   controllers: [BillingController, PolarWebhookController],
   providers: [PolarService, BillingService, PolarWebhookService],

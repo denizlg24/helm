@@ -10,6 +10,7 @@ import { LlmModule } from "./llm/llm.module"
 import { ModuleConfigModule } from "./module-configs/module-config.module"
 import { MongoModule } from "./mongo/mongo.module"
 import { NotesModule } from "./notes/notes.module"
+import { NotificationsModule } from "./notifications/notifications.module"
 import { OnboardingModule } from "./onboarding/onboarding.module"
 import { PomodoroModule } from "./pomodoro/pomodoro.module"
 import { RedisModule } from "./redis/redis.module"
@@ -31,6 +32,7 @@ import { WorkspaceModule } from "./workspaces/workspace.module"
     OnboardingModule,
     AssistantModule,
     NotesModule,
+    NotificationsModule,
     PomodoroModule,
     StorageModule,
     DesktopInstallerModule,

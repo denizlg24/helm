@@ -1565,3 +1565,162 @@ export type PomodoroSessionsResponse = z.infer<
 export type PomodoroSessionDetailResponse = z.infer<
   typeof PomodoroSessionDetailResponseSchema
 >
+
+// --- Notifications -------------------------------------------------------------
+
+export const NotificationCategorySchema = z.enum([
+  "billing",
+  "system",
+  "pomodoro",
+])
+
+// Categories that authenticated clients may create notifications for. Server-only
+// categories (billing, system) are emitted exclusively by API services.
+export const CLIENT_NOTIFICATION_CATEGORIES = ["pomodoro"] as const
+
+export const NotificationSeveritySchema = z.enum([
+  "info",
+  "success",
+  "warning",
+  "error",
+])
+
+export const NotificationActionAppSchema = z.enum(["web", "console"])
+
+export const NotificationActionSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("open-url"),
+    id: z.string().min(1),
+    label: z.string().min(1).max(60),
+    url: z.string().url(),
+  }),
+  z.object({
+    kind: z.literal("navigate"),
+    id: z.string().min(1),
+    label: z.string().min(1).max(60),
+    route: z.string().min(1).max(500).startsWith("/"),
+    app: NotificationActionAppSchema.default("web"),
+  }),
+])
+
+export const NotificationSourceSchema = z.enum(["server", "client"])
+
+export const NotificationSchema = z.object({
+  id: z.string().min(1),
+  tenantId: z.string().min(1),
+  workspaceId: z.string().min(1),
+  userId: z.string().min(1),
+  category: NotificationCategorySchema,
+  severity: NotificationSeveritySchema,
+  title: z.string().min(1).max(200),
+  body: z.string().max(2_000).nullable(),
+  actions: z.array(NotificationActionSchema).max(4),
+  source: NotificationSourceSchema,
+  dedupeKey: z.string().max(200).nullable(),
+  readAt: z.coerce.date().nullable(),
+  archivedAt: z.coerce.date().nullable(),
+  expiresAt: z.coerce.date().nullable(),
+  createdAt: z.coerce.date(),
+})
+
+export const CreateNotificationInputSchema = z.object({
+  category: z.enum(CLIENT_NOTIFICATION_CATEGORIES),
+  severity: NotificationSeveritySchema.default("info"),
+  title: z.string().min(1).max(200),
+  body: z.string().max(2_000).nullable().optional(),
+  actions: z.array(NotificationActionSchema).max(4).optional(),
+  dedupeKey: z.string().max(200).optional(),
+})
+
+export const NotificationsQuerySchema = z.object({
+  status: z.enum(["all", "unread"]).default("all"),
+  category: NotificationCategorySchema.optional(),
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+})
+
+export const NotificationListResponseSchema = z.object({
+  items: z.array(NotificationSchema),
+  nextCursor: z.string().nullable(),
+})
+
+export const NotificationUnreadCountResponseSchema = z.object({
+  count: z.number().int().nonnegative(),
+})
+
+export const MarkNotificationsReadInputSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(100),
+})
+
+export const MarkAllNotificationsReadInputSchema = z.object({
+  category: NotificationCategorySchema.optional(),
+})
+
+export const NotificationDetailResponseSchema = z.object({
+  notification: NotificationSchema,
+})
+
+export const NotificationPreferencesSchema = z.object({
+  mutedCategories: z.array(NotificationCategorySchema).default([]),
+})
+
+export const UpdateNotificationPreferencesInputSchema = z.object({
+  mutedCategories: z.array(NotificationCategorySchema),
+})
+
+export const NotificationPreferencesResponseSchema = z.object({
+  preferences: NotificationPreferencesSchema,
+})
+
+export const NotificationStreamEventSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("created"),
+    notification: NotificationSchema,
+  }),
+  z.object({
+    type: z.literal("updated"),
+    notification: NotificationSchema,
+  }),
+  z.object({
+    type: z.literal("read-all"),
+    category: NotificationCategorySchema.nullable(),
+  }),
+])
+
+export type NotificationCategory = z.infer<typeof NotificationCategorySchema>
+export type NotificationSeverity = z.infer<typeof NotificationSeveritySchema>
+export type NotificationActionApp = z.infer<typeof NotificationActionAppSchema>
+export type NotificationAction = z.infer<typeof NotificationActionSchema>
+export type NotificationSource = z.infer<typeof NotificationSourceSchema>
+export type Notification = z.infer<typeof NotificationSchema>
+export type CreateNotificationInput = z.infer<
+  typeof CreateNotificationInputSchema
+>
+export type NotificationsQuery = z.infer<typeof NotificationsQuerySchema>
+export type NotificationListResponse = z.infer<
+  typeof NotificationListResponseSchema
+>
+export type NotificationUnreadCountResponse = z.infer<
+  typeof NotificationUnreadCountResponseSchema
+>
+export type MarkNotificationsReadInput = z.infer<
+  typeof MarkNotificationsReadInputSchema
+>
+export type MarkAllNotificationsReadInput = z.infer<
+  typeof MarkAllNotificationsReadInputSchema
+>
+export type NotificationDetailResponse = z.infer<
+  typeof NotificationDetailResponseSchema
+>
+export type NotificationPreferences = z.infer<
+  typeof NotificationPreferencesSchema
+>
+export type UpdateNotificationPreferencesInput = z.infer<
+  typeof UpdateNotificationPreferencesInputSchema
+>
+export type NotificationPreferencesResponse = z.infer<
+  typeof NotificationPreferencesResponseSchema
+>
+export type NotificationStreamEvent = z.infer<
+  typeof NotificationStreamEventSchema
+>

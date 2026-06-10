@@ -10,7 +10,8 @@ export const createTauriPomodoroTimerStore = (
   const scope = `${workspaceId}_${userId}`
   return {
     load: () => invoke<string | null>("pomodoro_load_state", { scope }),
-    save: (snapshot) => invoke<void>("pomodoro_save_state", { scope, snapshot }),
+    save: (snapshot) =>
+      invoke<void>("pomodoro_save_state", { scope, snapshot }),
     clear: () => invoke<void>("pomodoro_clear_state", { scope }),
   }
 }

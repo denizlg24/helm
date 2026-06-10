@@ -11,6 +11,7 @@ import { BackgroundActivityProvider } from "@workspace/ui/lib/background-activit
 import { cn } from "@workspace/ui/lib/utils"
 import { AssistantDock } from "@/components/assistant-dock"
 import { CommandPalette } from "@/components/command-palette"
+import { NotificationsHostProvider } from "@/components/notifications-host-provider"
 import { PomodoroHostProvider } from "@/components/pomodoro-host-provider"
 import { SettingsProvider } from "@/components/settings/settings-provider"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -45,12 +46,14 @@ export default function RootLayout({
               <ClientToolsProvider>
                 <DataInvalidationProvider>
                   <BackgroundActivityProvider>
-                    <PomodoroHostProvider>
-                      {children}
-                      <AssistantDock />
-                      <CommandPalette />
-                      <Toaster position="bottom-right" />
-                    </PomodoroHostProvider>
+                    <NotificationsHostProvider>
+                      <PomodoroHostProvider>
+                        {children}
+                        <AssistantDock />
+                        <CommandPalette />
+                        <Toaster position="bottom-right" />
+                      </PomodoroHostProvider>
+                    </NotificationsHostProvider>
                   </BackgroundActivityProvider>
                 </DataInvalidationProvider>
               </ClientToolsProvider>

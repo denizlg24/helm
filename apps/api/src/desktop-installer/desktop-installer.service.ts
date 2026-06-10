@@ -18,6 +18,8 @@ import {
 import { z } from "zod"
 // biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
 import { AuditService } from "../audit/audit.service"
+// biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
+import { NotificationsService } from "../notifications/notifications.service"
 
 const GithubEnvSchema = z.object({
   GITHUB_INSTALLER_TOKEN: z.string().min(1),
@@ -55,7 +57,10 @@ interface ProxiedArtifact {
 
 @Injectable()
 export class DesktopInstallerService {
-  constructor(private readonly auditService: AuditService) {}
+  constructor(
+    private readonly auditService: AuditService,
+    private readonly notificationsService: NotificationsService
+  ) {}
 
   async list(authContext: AuthContext): Promise<DesktopBuild[]> {
     const rows = await db
@@ -256,7 +261,7 @@ export class DesktopInstallerService {
     // Wrapped in a transaction with a row lock so concurrent per-platform
     // callbacks (one per matrix OS) can't read-merge-write over each other and
     // drop artifacts.
-    return db.transaction(async (tx) => {
+    const readyTarget = await db.transaction(async (tx) => {
       const [row] = await tx
         .select()
         .from(desktopBuilds)
@@ -322,8 +327,38 @@ export class DesktopInstallerService {
           )
         )
 
-      return { received: true }
+      // Notification target is returned so the emit happens after commit —
+      // never inside the transaction.
+      if (row.status !== "ready" && nextStatus === "ready") {
+        return {
+          tenantId: row.tenantId,
+          workspaceId: row.workspaceId,
+          userId: row.userId,
+        }
+      }
+      return null
     })
+
+    if (readyTarget) {
+      await this.notificationsService.emit(readyTarget, {
+        category: "system",
+        severity: "success",
+        title: "Desktop installer ready",
+        body: "Your custom desktop installer finished building and is ready to download.",
+        dedupeKey: `installer:${buildId}:ready`,
+        actions: [
+          {
+            kind: "navigate",
+            id: "download-installer",
+            label: "Download",
+            route: "/desktop",
+            app: "console",
+          },
+        ],
+      })
+    }
+
+    return { received: true }
   }
 
   // Deletes every build for this workspace+user except `keepBuildId`, removing

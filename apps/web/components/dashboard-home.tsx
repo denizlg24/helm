@@ -173,7 +173,6 @@ export function DashboardHome({ user, onSignOut }: DashboardHomeProps) {
           onSettings={() => router.push("/settings")}
           onLogout={() => void onSignOut()}
           backgroundItems={backgroundActivities}
-          notifications={[]}
         />
 
         <main className="min-h-0 flex-1">
