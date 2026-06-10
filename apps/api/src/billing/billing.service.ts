@@ -35,6 +35,11 @@ import { EntitlementService } from "../entitlements/entitlement.service"
 // biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
 import { ModuleConfigService } from "../module-configs/module-config.service"
 // biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
+import {
+  type EmitNotificationInput,
+  NotificationsService,
+} from "../notifications/notifications.service"
+// biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
 import { OnboardingSelectionService } from "../onboarding/onboarding-selection.service"
 // biome-ignore lint/style/useImportType: Nest DI needs runtime metadata.
 import { UsageService } from "../usage/usage.service"
@@ -93,8 +98,59 @@ export class BillingService {
     private readonly usageService: UsageService,
     private readonly auditService: AuditService,
     private readonly polarService: PolarService,
-    private readonly onboardingSelectionService: OnboardingSelectionService
+    private readonly onboardingSelectionService: OnboardingSelectionService,
+    private readonly notificationsService: NotificationsService
   ) {}
+
+  /**
+   * Notify every member of the workspace about a billing event. Failures are
+   * logged and swallowed — a notification must never break a billing effect.
+   */
+  private async notifyMembers(
+    context: WorkspaceContext,
+    input: EmitNotificationInput
+  ): Promise<void> {
+    try {
+      const rows = await db
+        .select({ userId: member.userId })
+        .from(member)
+        .where(eq(member.organizationId, context.workspaceId))
+      const failures = await Promise.all(
+        rows.map(async (row) => {
+          try {
+            await this.notificationsService.emit(
+              {
+                tenantId: context.tenantId,
+                workspaceId: context.workspaceId,
+                userId: row.userId,
+              },
+              input
+            )
+            return null
+          } catch (error) {
+            return { error, userId: row.userId }
+          }
+        })
+      )
+      for (const failure of failures) {
+        if (failure) {
+          this.logger.warn(
+            `Failed to emit notification for user ${failure.userId} in workspace ${context.workspaceId} (tenant ${context.tenantId}): ${
+              failure.error instanceof Error
+                ? failure.error.message
+                : String(failure.error)
+            }`
+          )
+        }
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Failed to send billing notification for workspace ${context.workspaceId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      )
+    }
+  }
 
   /**
    * Resolve the workspace (and its tenant) behind a Polar `externalCustomerId`.
@@ -141,6 +197,22 @@ export class BillingService {
         polarSubscriptionId: polar.id,
       },
     })
+    await this.notifyMembers(context, {
+      category: "billing",
+      severity: "success",
+      title: "Plan activated",
+      body: `Your workspace is now on the ${plan} plan.`,
+      dedupeKey: `billing:plan:${polar.id}:active:${plan}`,
+      actions: [
+        {
+          kind: "navigate",
+          id: "manage-billing",
+          label: "Manage billing",
+          route: "/billing",
+          app: "console",
+        },
+      ],
+    })
   }
 
   /**
@@ -177,6 +249,22 @@ export class BillingService {
         status: "canceled",
         polarSubscriptionId: polar.id,
       },
+    })
+    await this.notifyMembers(context, {
+      category: "billing",
+      severity: "warning",
+      title: "Plan subscription ended",
+      body: "Your workspace was downgraded to the starter plan.",
+      dedupeKey: `billing:plan:${polar.id}:revoked`,
+      actions: [
+        {
+          kind: "navigate",
+          id: "manage-billing",
+          label: "Manage billing",
+          route: "/billing",
+          app: "console",
+        },
+      ],
     })
     this.logger.log(
       `Revoked plan subscription for workspace ${context.workspaceId}; downgraded to starter`
@@ -225,6 +313,22 @@ export class BillingService {
         polarSubscriptionId: polar.id,
       },
     })
+    await this.notifyMembers(context, {
+      category: "billing",
+      severity: "success",
+      title: "Module activated",
+      body: `The ${moduleId} module is now enabled for your workspace.`,
+      dedupeKey: `billing:module:${polar.id}:active:${moduleId}`,
+      actions: [
+        {
+          kind: "navigate",
+          id: "manage-modules",
+          label: "Manage modules",
+          route: "/modules",
+          app: "console",
+        },
+      ],
+    })
     this.logger.log(
       `Enabled module ${moduleId} for workspace ${context.workspaceId}`
     )
@@ -269,6 +373,22 @@ export class BillingService {
         polarSubscriptionId: polar.id,
       },
     })
+    await this.notifyMembers(context, {
+      category: "billing",
+      severity: "warning",
+      title: "Module subscription ended",
+      body: `The ${moduleId} module was disabled for your workspace.`,
+      dedupeKey: `billing:module:${polar.id}:revoked:${moduleId}`,
+      actions: [
+        {
+          kind: "navigate",
+          id: "manage-modules",
+          label: "Manage modules",
+          route: "/modules",
+          app: "console",
+        },
+      ],
+    })
     this.logger.log(
       `Disabled module ${moduleId} for workspace ${context.workspaceId}`
     )
@@ -296,6 +416,22 @@ export class BillingService {
         source: "polar",
         sourceRef,
       },
+    })
+    await this.notifyMembers(context, {
+      category: "billing",
+      severity: "success",
+      title: "Credits added",
+      body: `$${(amountUsdCents / 100).toFixed(2)} in AI credits was added to your workspace.`,
+      dedupeKey: `billing:credits:${sourceRef}`,
+      actions: [
+        {
+          kind: "navigate",
+          id: "view-usage",
+          label: "View usage",
+          route: "/usage",
+          app: "console",
+        },
+      ],
     })
   }
 

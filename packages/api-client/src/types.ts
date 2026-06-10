@@ -18,6 +18,12 @@ export interface HelmApiRequestClient {
     body: unknown,
     parse: (value: unknown) => T
   ) => Promise<T>
+  jsonRequestWithMethod: <T>(
+    path: string,
+    method: "POST" | "PUT" | "PATCH" | "DELETE",
+    body: unknown,
+    parse: (value: unknown) => T
+  ) => Promise<T>
   // POST a JSON body and consume a Server-Sent Events response, yielding each
   // parsed `data:` payload as it arrives.
   stream: <T>(

@@ -103,7 +103,9 @@ export class CoreAssistantToolProvider implements AssistantToolProvider {
           const parsed = z
             .object({ confirm: z.boolean().optional() })
             .safeParse(input)
-          const confirmed = parsed.success ? parsed.data.confirm === true : false
+          const confirmed = parsed.success
+            ? parsed.data.confirm === true
+            : false
 
           if (!confirmed) {
             throw new Error(

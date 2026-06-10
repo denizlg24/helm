@@ -106,6 +106,22 @@ export const createRequestClient = (
       parse
     )
 
+  const jsonRequestWithMethod = async <T>(
+    path: string,
+    method: "POST" | "PUT" | "PATCH" | "DELETE",
+    body: unknown,
+    parse: (value: unknown) => T
+  ) =>
+    request(
+      path,
+      {
+        method,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      parse
+    )
+
   async function* stream<T>(
     path: string,
     body: unknown,
@@ -175,5 +191,5 @@ export const createRequestClient = (
     }
   }
 
-  return { request, jsonRequest, stream }
+  return { request, jsonRequest, jsonRequestWithMethod, stream }
 }

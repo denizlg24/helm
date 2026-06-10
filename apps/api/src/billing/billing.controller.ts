@@ -10,9 +10,9 @@ import {
   type AuthContext,
   type ChangePlanInput,
   ChangePlanInputSchema,
+  CheckoutIdParamSchema,
   type CheckoutInput,
   CheckoutInputSchema,
-  CheckoutIdParamSchema,
   SubscriptionIdParamSchema,
 } from "@workspace/types"
 import {

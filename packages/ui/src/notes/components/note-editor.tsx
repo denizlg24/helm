@@ -108,7 +108,10 @@ export function NoteEditor({
   })
   useRegisterClientTool("notes_rewrite_open", (input) => {
     if (typeof input.content !== "string") {
-      return { result: "Invalid payload: content must be a string", isError: true }
+      return {
+        result: "Invalid payload: content must be a string",
+        isError: true,
+      }
     }
     setEditorContent(input.content)
     setTogglePreview(false)

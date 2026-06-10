@@ -32,6 +32,8 @@ import {
   Settings,
 } from "lucide-react"
 import type { ReactNode } from "react"
+import { ConnectedNotificationMenu } from "../notifications/notification-menu"
+import { useNotificationsOptional } from "../notifications/notifications-provider"
 
 export interface AppHeaderUser {
   name?: string | null
@@ -122,10 +124,10 @@ export function AppHeader({
             mobile={isMobile}
           />
         ) : null}
-        <NotificationMenu
+        <HeaderNotificationMenu
+          legacyNotifications={notifications}
+          legacyUnreadCount={unreadCount}
           mobile={isMobile}
-          notifications={notifications}
-          unreadCount={unreadCount}
         />
         <ProfileMenu
           mobile={isMobile}
@@ -140,7 +142,32 @@ export function AppHeader({
   )
 }
 
-function NotificationMenu({
+// Renders the live notification menu when a NotificationsProvider is mounted;
+// otherwise falls back to the legacy static-props menu so existing call sites
+// keep working unchanged.
+function HeaderNotificationMenu({
+  legacyNotifications,
+  legacyUnreadCount,
+  mobile,
+}: {
+  legacyNotifications: AppHeaderNotification[]
+  legacyUnreadCount: number
+  mobile: boolean
+}) {
+  const live = useNotificationsOptional()
+  if (!live) {
+    return (
+      <LegacyNotificationMenu
+        mobile={mobile}
+        notifications={legacyNotifications}
+        unreadCount={legacyUnreadCount}
+      />
+    )
+  }
+  return <ConnectedNotificationMenu mobile={mobile} />
+}
+
+function LegacyNotificationMenu({
   mobile,
   notifications,
   unreadCount,

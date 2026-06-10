@@ -30,6 +30,7 @@ import {
 import type { AppHeaderBackgroundItem } from "../components/app-header"
 import { toast } from "../components/sonner"
 import { usePublishBackgroundActivity } from "../lib/background-activity"
+import { useNotificationsOptional } from "../notifications/notifications-provider"
 import {
   createLocalStorageTimerStore,
   type FocusResult,
@@ -197,12 +198,48 @@ export function PomodoroProvider({
     []
   )
 
-  // Hosts without a notify implementation (web) get no system notification;
-  // the in-app notification system will cover this later.
+  // When a NotificationsProvider is mounted, user-facing notices are persisted
+  // as pomodoro notifications — the SSE echo renders the toast on every
+  // connected device. Without one (or when the create fails) they fall back to
+  // a local toast so feedback is never lost.
+  const notificationsContext = useNotificationsOptional()
+  const publishRef = useRef(notificationsContext?.publish ?? null)
+  publishRef.current = notificationsContext?.publish ?? null
+
+  const emitUserNotice = useCallback(
+    (title: string, body: string, severity: "info" | "error" = "info") => {
+      const showToast = () => {
+        if (severity === "error") {
+          toast.error(title, { description: body })
+        } else {
+          toast(title, { description: body })
+        }
+      }
+      const publish = publishRef.current
+      if (publish) {
+        void publish({ category: "pomodoro", title, body, severity }).catch(
+          showToast
+        )
+        return
+      }
+      showToast()
+    },
+    []
+  )
+
   const announce = useCallback(
     (title: string, body: string) => {
       if (!settingsRef.current.notificationsEnabled) return
       notify?.(title, body)
+      const publish = publishRef.current
+      if (publish) {
+        void publish({
+          category: "pomodoro",
+          title,
+          body,
+          severity: "info",
+        }).catch(() => {})
+      }
     },
     [notify]
   )
@@ -256,10 +293,14 @@ export function PomodoroProvider({
       recordSession(focus, "completed")
         .then((session) => setPendingAnnotation(session))
         .catch((error) => {
-          toast.error(getErrorMessage(error, "Could not save the session"))
+          emitUserNotice(
+            "Could not save the session",
+            getErrorMessage(error, "The focus session was not recorded."),
+            "error"
+          )
         })
     },
-    [enabled, announce, chime, flashScene, recordSession]
+    [enabled, announce, chime, emitUserNotice, flashScene, recordSession]
   )
 
   const handleFocusAbandoned = useCallback(
@@ -267,22 +308,28 @@ export function PomodoroProvider({
       if (!enabled) return
       flashScene("sinking", 1600)
       if (focus.completedSeconds < MIN_RECORDED_ABANDON_SECONDS) {
-        toast("Session ended", {
-          description: "Sessions under a minute are not logged.",
-        })
+        emitUserNotice(
+          "Session ended",
+          "Sessions under a minute are not logged."
+        )
         return
       }
       recordSession(focus, "abandoned")
         .then(() => {
-          toast("Session ended early", {
-            description: "Logged as an unfinished session.",
-          })
+          emitUserNotice(
+            "Session ended early",
+            "Logged as an unfinished session."
+          )
         })
         .catch((error) => {
-          toast.error(getErrorMessage(error, "Could not save the session"))
+          emitUserNotice(
+            "Could not save the session",
+            getErrorMessage(error, "The focus session was not recorded."),
+            "error"
+          )
         })
     },
-    [enabled, flashScene, recordSession]
+    [enabled, emitUserNotice, flashScene, recordSession]
   )
 
   const handleBreakComplete = useCallback(() => {

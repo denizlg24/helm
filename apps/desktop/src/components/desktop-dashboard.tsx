@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core"
+import { openUrl } from "@tauri-apps/plugin-opener"
 import { platform } from "@tauri-apps/plugin-os"
 import {
   ChatView,
@@ -41,6 +42,8 @@ import {
 } from "@workspace/ui/lib/background-activity"
 import { useSettingsUpdater } from "@workspace/ui/lib/use-settings-updater"
 import { cn } from "@workspace/ui/lib/utils"
+import { NotificationsProvider } from "@workspace/ui/notifications/notifications-provider"
+import { NotificationsView } from "@workspace/ui/notifications/notifications-view"
 import { PomodoroProvider } from "@workspace/ui/pomodoro/pomodoro-provider"
 import { SettingsView } from "@workspace/ui/settings/settings-view"
 import type { LucideIcon } from "lucide-react"
@@ -231,7 +234,7 @@ function DesktopDashboardInner({
   onDisconnect,
 }: DesktopDashboardProps) {
   const [surface, setSurface] = useState<
-    "assistant" | "notes" | "pomodoro" | "settings"
+    "assistant" | "notes" | "pomodoro" | "settings" | "notifications"
   >("assistant")
   const [ready, setReady] = useState(false)
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS)
@@ -431,6 +434,30 @@ function DesktopDashboardInner({
     }
   }, [])
 
+  // The desktop app mirrors web routes, so notification navigate actions
+  // targeting "web" map onto local surfaces. Unknown routes are ignored.
+  const handleNotificationNavigate = useCallback((route: string) => {
+    if (route.startsWith("/notes")) {
+      setSurface("notes")
+    } else if (route.startsWith("/pomodoro")) {
+      setSurface("pomodoro")
+    } else if (route.startsWith("/settings")) {
+      setSurface("settings")
+    } else if (route.startsWith("/notifications")) {
+      setSurface("notifications")
+    } else if (route === "/") {
+      setSurface("assistant")
+    }
+  }, [])
+
+  const openExternalUrl = useCallback((url: string) => {
+    void openUrl(url)
+  }, [])
+
+  const viewAllNotifications = useCallback(() => {
+    setSurface("notifications")
+  }, [])
+
   const handleRename = useCallback(async (id: string, title: string) => {
     try {
       const updated = await apiClient.assistant.renameConversation(id, {
@@ -482,6 +509,38 @@ function DesktopDashboardInner({
           platform="desktop"
           onChange={updateSetting}
         />
+      </main>
+    </div>
+  ) : surface === "notifications" ? (
+    <div className="flex h-svh w-full flex-col overflow-hidden bg-background">
+      <CommandPaletteOverlay
+        entries={commandEntries}
+        shortcut={settings.shortcuts.commandPalette}
+        onSelect={handleCommandSelect}
+      />
+      <header
+        data-tauri-drag-region
+        className={cn(
+          "flex h-12 shrink-0 items-center gap-2 border-border border-b px-3",
+          isMac && "pl-20"
+        )}
+      >
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label="Back"
+          onClick={() => setSurface("assistant")}
+        >
+          <ArrowLeft className="size-4" />
+        </Button>
+        <span className="font-medium text-sm">Notifications</span>
+        <div className="ml-auto">
+          <WindowControls />
+        </div>
+      </header>
+      <main className="min-h-0 flex-1 overflow-y-auto px-4 py-8">
+        <NotificationsView />
       </main>
     </div>
   ) : surface === "notes" ? (
@@ -578,7 +637,6 @@ function DesktopDashboardInner({
           onSettings={() => setSurface("settings")}
           onLogout={onDisconnect}
           backgroundItems={backgroundActivities}
-          notifications={[]}
           endSlot={<WindowControls />}
         />
 
@@ -597,13 +655,25 @@ function DesktopDashboardInner({
     [authScope]
   )
 
+  const consoleUrl: string | undefined = import.meta.env.VITE_HELM_CONSOLE_URL
+
   return (
-    <PomodoroProvider
+    <NotificationsProvider
+      appBaseUrls={consoleUrl ? { console: consoleUrl } : undefined}
       client={apiClient}
-      enabled={ready && pomodoroAvailable && pomodoroTimerStore !== undefined}
-      timerStore={pomodoroTimerStore}
+      currentApp="web"
+      enabled={ready && authScope !== null}
+      navigate={handleNotificationNavigate}
+      openUrl={openExternalUrl}
+      viewAll={viewAllNotifications}
     >
-      {surfaceContent}
-    </PomodoroProvider>
+      <PomodoroProvider
+        client={apiClient}
+        enabled={ready && pomodoroAvailable && pomodoroTimerStore !== undefined}
+        timerStore={pomodoroTimerStore}
+      >
+        {surfaceContent}
+      </PomodoroProvider>
+    </NotificationsProvider>
   )
 }

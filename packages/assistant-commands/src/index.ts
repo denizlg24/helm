@@ -51,7 +51,9 @@ export const parseAssistantCommand = (
 
   const firstWhitespace = trimmed.search(/\s/)
   const token = (
-    firstWhitespace === -1 ? trimmed.slice(1) : trimmed.slice(1, firstWhitespace)
+    firstWhitespace === -1
+      ? trimmed.slice(1)
+      : trimmed.slice(1, firstWhitespace)
   ).toLowerCase()
   const command = byName.get(token)
   if (!command) return null
