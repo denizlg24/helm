@@ -29,6 +29,21 @@ export const createNotificationActionResolver = (
         openUrl(action.url)
         return
       case "navigate": {
+        // Detect absolute URLs and treat them as open-url instead of in-app navigation.
+        let isAbsolute = false
+        try {
+          new URL(action.route)
+          isAbsolute = true
+        } catch {
+          // action.route is not an absolute URL; treat as relative.
+        }
+        if (isAbsolute) {
+          console.warn(
+            `Navigate action has absolute route "${action.route}"; treating as open-url`
+          )
+          openUrl(action.route)
+          return
+        }
         if (action.app === options.currentApp && options.navigate) {
           options.navigate(action.route)
           return

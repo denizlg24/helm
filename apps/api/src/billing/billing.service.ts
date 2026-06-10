@@ -115,7 +115,7 @@ export class BillingService {
         .select({ userId: member.userId })
         .from(member)
         .where(eq(member.organizationId, context.workspaceId))
-      await Promise.all(
+      const results = await Promise.allSettled(
         rows.map((row) =>
           this.notificationsService.emit(
             {
@@ -127,6 +127,19 @@ export class BillingService {
           )
         )
       )
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i]
+        if (result.status === "rejected") {
+          const row = rows[i]
+          this.logger.warn(
+            `Failed to emit notification for user ${row.userId} in workspace ${context.workspaceId} (tenant ${context.tenantId}): ${
+              result.reason instanceof Error
+                ? result.reason.message
+                : String(result.reason)
+            }`
+          )
+        }
+      }
     } catch (error) {
       this.logger.warn(
         `Failed to send billing notification for workspace ${context.workspaceId}: ${

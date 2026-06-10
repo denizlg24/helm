@@ -27,7 +27,7 @@ export class NotificationsEventsService
 
   constructor(private readonly redis: RedisService) {}
 
-  onModuleInit() {
+  async onModuleInit() {
     const subscriber = this.redis.client.duplicate()
     subscriber.on("message", (channel: string, message: string) => {
       this.dispatch(channel, message)
@@ -35,7 +35,17 @@ export class NotificationsEventsService
     subscriber.on("error", (error: Error) => {
       this.logger.error(`Redis subscriber error: ${error.message}`)
     })
-    this.subscriber = subscriber
+    try {
+      await subscriber.connect()
+      this.subscriber = subscriber
+    } catch (error) {
+      this.logger.error(
+        `Failed to connect Redis subscriber: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      )
+      throw error
+    }
   }
 
   async onModuleDestroy() {
@@ -63,9 +73,18 @@ export class NotificationsEventsService
     if (!channelHandlers) {
       channelHandlers = new Set()
       this.handlers.set(channel, channelHandlers)
-      this.subscriber?.subscribe(channel).catch((error: Error) => {
-        this.logger.error(`Failed to subscribe to ${channel}: ${error.message}`)
-      })
+      // Subscribe asynchronously; on failure clean up the channel entry so
+      // callers are not left believing they are subscribed.
+      void (async () => {
+        try {
+          await this.subscriber?.subscribe(channel)
+        } catch (error) {
+          this.logger.error(
+            `Failed to subscribe to ${channel}: ${error instanceof Error ? error.message : String(error)}`
+          )
+          this.handlers.delete(channel)
+        }
+      })()
     }
     channelHandlers.add(handler)
 
@@ -74,12 +93,19 @@ export class NotificationsEventsService
       if (!current) return
       current.delete(handler)
       if (current.size === 0) {
-        this.handlers.delete(channel)
-        this.subscriber?.unsubscribe(channel).catch((error: Error) => {
-          this.logger.error(
-            `Failed to unsubscribe from ${channel}: ${error.message}`
-          )
-        })
+        // Await unsubscribe before removing the channel from handlers so local
+        // state stays consistent with Redis; restore the handler set on failure.
+        void (async () => {
+          try {
+            await this.subscriber?.unsubscribe(channel)
+            this.handlers.delete(channel)
+          } catch (error) {
+            this.logger.error(
+              `Failed to unsubscribe from ${channel}: ${error instanceof Error ? error.message : String(error)}`
+            )
+            // Leave handlers intact — local state must mirror Redis subscription.
+          }
+        })()
       }
     }
   }

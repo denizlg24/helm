@@ -116,29 +116,22 @@ export class NotificationsService {
 
     let doc: NotificationDocument | null
     if (input.dedupeKey) {
-      const result = await this.repository.notifications.updateOne(
+      const generatedId = crypto.randomUUID()
+      const result = await this.repository.notifications.findOneAndUpdate(
         {
           tenantId: target.tenantId,
           workspaceId: target.workspaceId,
           userId: target.userId,
           dedupeKey: input.dedupeKey,
         },
-        { $setOnInsert: { ...fields, id: crypto.randomUUID() } },
-        { upsert: true }
+        { $setOnInsert: { ...fields, id: generatedId } },
+        { upsert: true, new: true }
       )
-      if (result.upsertedCount === 0) {
+      doc = result ? result.toObject<NotificationDocument>() : null
+      if (doc && doc.id !== generatedId) {
         // Idempotent re-emit (e.g. webhook redelivery) — nothing new to publish.
         return null
       }
-      doc = await this.repository.notifications
-        .findOne({
-          tenantId: target.tenantId,
-          workspaceId: target.workspaceId,
-          userId: target.userId,
-          dedupeKey: input.dedupeKey,
-        })
-        .lean<NotificationDocument>()
-        .exec()
     } else {
       const created = await this.repository.notifications.create(fields)
       doc = created.toObject<NotificationDocument>()

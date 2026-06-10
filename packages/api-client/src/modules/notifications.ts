@@ -40,6 +40,7 @@ const idPath = (base: string, id: string): string =>
 export const createNotificationsModule = ({
   request,
   jsonRequest,
+  jsonRequestWithMethod,
   stream,
 }: HelmApiRequestClient) => ({
   list: (query?: NotificationsQuery) =>
@@ -78,15 +79,10 @@ export const createNotificationsModule = ({
         NotificationPreferencesResponseSchema.parse(value)
       ),
     update: (input: UpdateNotificationPreferencesInput) =>
-      request(
+      jsonRequestWithMethod(
         "/api/notifications/preferences",
-        {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(
-            UpdateNotificationPreferencesInputSchema.parse(input)
-          ),
-        },
+        "PUT",
+        UpdateNotificationPreferencesInputSchema.parse(input),
         (value) => NotificationPreferencesResponseSchema.parse(value)
       ),
   },

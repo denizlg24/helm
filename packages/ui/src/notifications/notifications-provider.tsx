@@ -139,15 +139,21 @@ const reducer = (
     }
     case "read-all": {
       const now = new Date()
-      return {
-        ...state,
-        items: state.items.map((item) =>
+      let markedReadCount = 0
+      const updatedItems = state.items.map((item) => {
+        if (
           item.readAt === null &&
           (action.category === null || item.category === action.category)
-            ? { ...item, readAt: now }
-            : item
-        ),
-        unreadCount: action.category === null ? 0 : state.unreadCount,
+        ) {
+          markedReadCount++
+          return { ...item, readAt: now }
+        }
+        return item
+      })
+      return {
+        ...state,
+        items: updatedItems,
+        unreadCount: Math.max(0, state.unreadCount - markedReadCount),
       }
     }
     case "connected":

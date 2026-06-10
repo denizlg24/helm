@@ -131,18 +131,43 @@ export class NotificationsController {
     @Res() reply: FastifyReply
   ) {
     const emit = this.openStream(reply)
-    const unsubscribe = this.events.subscribe(
-      actor.workspaceId,
-      actor.userId,
-      (event) => emit.send(event)
-    )
-    // Comment-line heartbeat keeps proxies from idling out the connection; the
-    // client parser only consumes `data:` lines, so pings are ignored.
-    const heartbeat = setInterval(() => emit.ping(), HEARTBEAT_INTERVAL_MS)
-    reply.raw.on("close", () => {
-      clearInterval(heartbeat)
-      unsubscribe()
-    })
+    let unsubscribe: (() => void) | null = null
+    let heartbeat: NodeJS.Timeout | null = null
+
+    try {
+      unsubscribe = this.events.subscribe(
+        actor.workspaceId,
+        actor.userId,
+        (event) => {
+          try {
+            emit.send(event)
+          } catch (error) {
+            // Serialization or send failure — log but do not throw.
+            reply.log?.error?.({
+              error,
+              msg: "Failed to send notification event to stream",
+            })
+          }
+        }
+      )
+      heartbeat = setInterval(() => emit.ping(), HEARTBEAT_INTERVAL_MS)
+      reply.raw.on("close", () => {
+        if (heartbeat) clearInterval(heartbeat)
+        if (unsubscribe) unsubscribe()
+      })
+    } catch (error) {
+      if (heartbeat) clearInterval(heartbeat)
+      if (unsubscribe) unsubscribe()
+      reply.log?.error?.({
+        error,
+        msg: "Failed to establish notification stream subscription",
+      })
+      if (!reply.raw.headersSent) {
+        reply.status(500).send({ error: "Failed to open notification stream" })
+      } else {
+        reply.raw.end()
+      }
+    }
   }
 
   // Opens an SSE response on the raw socket. Merges headers already set by the
