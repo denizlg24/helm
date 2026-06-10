@@ -115,27 +115,30 @@ export class BillingService {
         .select({ userId: member.userId })
         .from(member)
         .where(eq(member.organizationId, context.workspaceId))
-      const results = await Promise.allSettled(
-        rows.map((row) =>
-          this.notificationsService.emit(
-            {
-              tenantId: context.tenantId,
-              workspaceId: context.workspaceId,
-              userId: row.userId,
-            },
-            input
-          )
-        )
+      const failures = await Promise.all(
+        rows.map(async (row) => {
+          try {
+            await this.notificationsService.emit(
+              {
+                tenantId: context.tenantId,
+                workspaceId: context.workspaceId,
+                userId: row.userId,
+              },
+              input
+            )
+            return null
+          } catch (error) {
+            return { error, userId: row.userId }
+          }
+        })
       )
-      for (let i = 0; i < results.length; i++) {
-        const result = results[i]
-        if (result.status === "rejected") {
-          const row = rows[i]
+      for (const failure of failures) {
+        if (failure) {
           this.logger.warn(
-            `Failed to emit notification for user ${row.userId} in workspace ${context.workspaceId} (tenant ${context.tenantId}): ${
-              result.reason instanceof Error
-                ? result.reason.message
-                : String(result.reason)
+            `Failed to emit notification for user ${failure.userId} in workspace ${context.workspaceId} (tenant ${context.tenantId}): ${
+              failure.error instanceof Error
+                ? failure.error.message
+                : String(failure.error)
             }`
           )
         }
