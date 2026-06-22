@@ -86,7 +86,7 @@ jobs:
       group: custom-desktop-${{ github.event.inputs.build_id }}-${{ matrix.os }}
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
         with:
