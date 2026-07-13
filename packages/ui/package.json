@@ -52,7 +52,7 @@
     "@types/react-dom": "^19.2.3",
     "@workspace/typescript-config": "workspace:*",
     "tailwindcss": "^4.1.18",
-    "typescript": "^5.9.3"
+    "typescript": "^7.0.2"
   },
   "exports": {
     "./globals.css": "./src/styles/globals.css",
