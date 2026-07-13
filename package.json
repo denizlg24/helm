@@ -31,7 +31,7 @@
     "husky": "^9.1.7",
     "lint-staged": "^17.0.5",
     "turbo": "^2.9.14",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,json,jsonc,css,md}": [
